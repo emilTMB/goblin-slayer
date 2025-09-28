@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import styles from "../styles/Game.module.scss";
 import useKeyboard from "./useKeyboard";
 
+const asset = (p) => `${import.meta.env.BASE_URL}${p.replace(/^\//, "")}`;
 /** === МЕТА ПОД СПРАЙТЫ ===
  * Все листы — один ряд, вправо. Кадр 16×24.
  */
@@ -23,23 +24,23 @@ const MAX_HP = 3;
 const MOBILE_WIDTH = 1280;
 
 const sprites = {
-  idle: { src: "/assets/idle.png", cols: 4, fps: 6 },
-  run: { src: "/assets/run.png", cols: 4, fps: 10 },
-  die: { src: "/assets/die.png", cols: 4, fps: 6 },
-  sleep: { src: "/assets/sleep.png", cols: 6, fps: 5 },
-  idleSword: { src: "/assets/idle-sword.png", cols: 4, fps: 6 },
-  runSword: { src: "/assets/run-sword.png", cols: 4, fps: 10 },
-  attackSword: { src: "/assets/attack-sword.png", cols: 6, fps: 14 },
+  idle: { src: asset("assets/idle.png"), cols: 4, fps: 6 },
+  run: { src: asset("assets/run.png"), cols: 4, fps: 10 },
+  die: { src: asset("assets/die.png"), cols: 4, fps: 6 },
+  sleep: { src: asset("assets/sleep.png"), cols: 6, fps: 5 },
+  idleSword: { src: asset("assets/idle-sword.png"), cols: 4, fps: 6 },
+  runSword: { src: asset("assets/run-sword.png"), cols: 4, fps: 10 },
+  attackSword: { src: asset("assets/attack-sword.png"), cols: 6, fps: 14 },
 };
 
 // === СПРАЙТЫ ГОБЛИНА ===
 const GOB_W = 16,
   GOB_H = 24;
 const goblinSprites = {
-  idle: { src: "/assets/goblin/goblin-idle.png", cols: 4, fps: 6 },
-  run: { src: "/assets/goblin/goblin-run.png", cols: 4, fps: 10 },
-  attack: { src: "/assets/goblin/goblin-attack.png", cols: 6, fps: 12 },
-  die: { src: "/assets/goblin/goblin-die.png", cols: 4, fps: 8 },
+  idle: { src: asset("assets/goblin/goblin-idle.png"), cols: 4, fps: 6 },
+  run: { src: asset("assets/goblin/goblin-run.png"), cols: 4, fps: 10 },
+  attack: { src: asset("assets/goblin/goblin-attack.png"), cols: 6, fps: 12 },
+  die: { src: asset("assets/goblin/goblin-die.png"), cols: 4, fps: 8 },
 };
 
 // карта: 0 — трава, 1 — стена
