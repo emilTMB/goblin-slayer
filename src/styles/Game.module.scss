@@ -156,6 +156,10 @@ $app-bg: #0e0f13;
   touch-action: none;
 
   transition: background 0.2s, transform 0.1s;
+  &:hover {
+    background: lab(25.87% 32.81 17.82);
+    transform: scale(0.97);
+  }
 }
 
 .attackBtn:active {
