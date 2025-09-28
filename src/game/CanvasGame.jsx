@@ -112,31 +112,53 @@ function drawFlippable(ctx, img, sx, sy, sw, sh, dx, dy, flipX = false) {
  * ========================= */
 function MobileJoystick({ onDirKeysChange, onAttackDown, onAttackUp }) {
   const baseRef = useRef(null);
+  const [knob, setKnob] = useState({ x: 0, y: 0 }); // смещение «шляпки» в px
 
   const updateFromTouch = (touch) => {
     const el = baseRef.current;
     if (!el) return;
+
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    const dx = touch.clientX - cx;
-    const dy = touch.clientY - cy;
-    const dead = 12; // мёртвая зона
 
+    // вектор пальца относительно центра
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
+
+    // ограничения круга (радиус базы минус радиус «шляпки»)
+    const dotRadius = 22; // из CSS (44px / 2)
+    const maxR = rect.width / 2 - dotRadius;
+    const r = Math.hypot(dx, dy);
+
+    // мёртвая зона и осевой порог
+    const dead = 14; // круговая мёртвая зона
+    const axisDead = 6; // порог по осям для устранения дрожи
+
+    // ограничиваем позицию «шляпки» кругом
+    if (r > maxR) {
+      dx = (dx / r) * maxR;
+      dy = (dy / r) * maxR;
+    }
+
+    // визуально двигаем «шляпку»
+    setKnob({ x: dx, y: dy });
+
+    // логика направлений (можно по диагонали)
     const keys = new Set();
-    if (Math.hypot(dx, dy) > dead) {
-      if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx > 0) keys.add("arrowright");
-        else keys.add("arrowleft");
-      } else {
-        if (dy > 0) keys.add("arrowdown");
-        else keys.add("arrowup");
-      }
+    if (r > dead) {
+      if (dx > axisDead) keys.add("arrowright");
+      if (dx < -axisDead) keys.add("arrowleft");
+      if (dy > axisDead) keys.add("arrowdown");
+      if (dy < -axisDead) keys.add("arrowup");
     }
     onDirKeysChange(keys);
   };
 
-  const clearDir = () => onDirKeysChange(new Set());
+  const clearDir = () => {
+    onDirKeysChange(new Set());
+    setKnob({ x: 0, y: 0 }); // вернуть «шляпку» в центр
+  };
 
   return (
     <div className={styles.mobileUI}>
@@ -144,12 +166,31 @@ function MobileJoystick({ onDirKeysChange, onAttackDown, onAttackUp }) {
       <div
         className={styles.joystick}
         ref={baseRef}
-        onTouchStart={(e) => updateFromTouch(e.touches[0])}
-        onTouchMove={(e) => updateFromTouch(e.touches[0])}
-        onTouchEnd={clearDir}
-        onTouchCancel={clearDir}
+        onTouchStart={(e) => {
+          e.preventDefault();
+          updateFromTouch(e.touches[0]);
+        }}
+        onTouchMove={(e) => {
+          e.preventDefault();
+          updateFromTouch(e.touches[0]);
+        }}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          clearDir();
+        }}
+        onTouchCancel={(e) => {
+          e.preventDefault();
+          clearDir();
+        }}
       >
-        <div className={styles.joystickDot} />
+        <div
+          className={styles.joystickDot}
+          style={{
+            transform: `translate(calc(0% + ${Math.round(
+              knob.x
+            )}px), calc(0% + ${Math.round(knob.y)}px))`,
+          }}
+        />
       </div>
 
       {/* Attack (SPACE) */}
@@ -226,7 +267,7 @@ export default function CanvasGame() {
     startRef.current = performance.now();
     setGameOver(false);
     setElapsedMs(0);
-    setKills(0); // сбрасываем счётчик убийств при рестарте
+    setKills(0); // сброс убийств
 
     const c = canvasRef.current;
     const ctx = c.getContext("2d");
@@ -536,15 +577,14 @@ export default function CanvasGame() {
         }
       }
 
-      // ✅ Атака по времени: от 0-го до последнего кадра без зацикливания
+      // Атака по времени: от 0-го до последнего кадра без зацикливания
       if (player.state === "attack") {
-        const t = now - player.attackStartedAt; // мс с начала удара
+        const t = now - player.attackStartedAt;
         const cols = sprites.attackSword.cols;
         const fps = sprites.attackSword.fps;
         const frameByTime = Math.min(cols - 1, Math.floor((t / 1000) * fps));
         player.frame = frameByTime;
 
-        // завершение удара ровно по окончании спрайт-листа
         if (t >= ATTACK_TOTAL_MS) {
           player.state = "idle";
           player.frame = 0;
@@ -552,7 +592,7 @@ export default function CanvasGame() {
         }
       }
 
-      // страховка: смерть по таймеру (если по кадрам не дошло)
+      // страховка: смерть по таймеру
       if (player.state === "die") {
         if (player.dieStartedAt === 0) player.dieStartedAt = now;
         if (!player.dead && now - player.dieStartedAt >= DIE_DURATION_MS - 10) {
@@ -635,7 +675,7 @@ export default function CanvasGame() {
               g.state = "die";
               g.frame = 0;
               g.acc = 0;
-              setKills((k) => k + 1); // ✅ считаем убийство
+              setKills((k) => k + 1); // считаем убийство
             }
           }
         }

@@ -200,3 +200,35 @@ $app-bg: #0e0f13;
     padding-bottom: 20px;
   }
 }
+
+.joystick {
+  pointer-events: auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.06),
+    rgba(0, 0, 0, 0.2)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.joystickDot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  /* чтобы было приятно возвращаться в центр */
+  transition: transform 80ms ease-out;
+  will-change: transform;
+}
