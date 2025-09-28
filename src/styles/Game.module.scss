@@ -1,0 +1,198 @@
+$app-bg: #0e0f13;
+
+.app {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  background: radial-gradient(60% 60% at 50% 40%, #1a1f2a, $app-bg);
+  color: #e8f0ff;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+
+.title {
+  font-size: 22px;
+  letter-spacing: 0.5px;
+  margin: 16px 0 8px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.hint {
+  opacity: 0.8;
+  font-size: 14px;
+  margin: 8px 24px 12px;
+  text-align: center;
+
+  @media (max-width: 1280px) {
+    display: none;
+  }
+}
+
+.canvasWrap {
+  position: relative;
+  padding: 8px;
+  border-radius: 14px;
+  background: #0b0d11;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.canvas {
+  image-rendering: pixelated;
+  width: 640px; // масштаб отображения
+  height: 480px;
+  background: #1a1e25;
+  border-radius: 8px;
+  display: block;
+
+  @media (max-width: 700px) {
+    width: 100%;
+    height: auto;
+  }
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+}
+
+.modal {
+  min-width: 260px;
+  max-width: 90%;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: #141821;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  color: #eaf2ff;
+  text-align: center;
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+  }
+  p {
+    margin: 0 0 12px;
+    opacity: 0.9;
+  }
+}
+
+.btn {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* =======================
+   Мобильный UI (джойстик)
+   ======================= */
+
+.mobileUI {
+  position: fixed;
+  inset: auto 0 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  pointer-events: none; /* клики проходят только по самим контролам */
+  z-index: 50;
+}
+
+.joystick {
+  pointer-events: auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.06),
+    rgba(0, 0, 0, 0.2)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.joystickDot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.attackBtn {
+  pointer-events: auto;
+  margin-left: auto;
+  margin-right: 8px;
+  width: 90px;
+  height: 90px;
+  // border-radius: 50%;
+  // background: radial-gradient(circle at 30% 30%, #ffefef, #e24a4a);
+  background: #e24a4a;
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 6px 16px rgba(226, 74, 74, 0.35),
+    inset 0 2px 6px rgba(255, 255, 255, 0.3);
+  touch-action: none;
+
+  transition: background 0.2s, transform 0.1s;
+}
+
+.attackBtn:active {
+  transform: scale(0.97);
+  background: lab(25.87% 32.81 17.82);
+}
+
+.swordBtn {
+  width: 48px;
+  height: 48px;
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 1280px) {
+  /* обёртка занимает весь экран */
+  .canvasWrap {
+    position: fixed;
+    inset: 0;
+    padding: 0;
+    border-radius: 0;
+    background: #0b0d11;
+    box-shadow: none;
+
+    display: grid;
+    place-items: center;
+  }
+
+  .canvas {
+    width: 100vw;
+    height: auto;
+    max-height: 100vh;
+    aspect-ratio: 4 / 3;
+    border-radius: 0;
+  }
+
+  .mobileUI {
+    padding-bottom: 20px;
+  }
+}
