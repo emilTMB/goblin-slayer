@@ -15,7 +15,6 @@ const VIEW_H = 240;
 
 const PLAYER_SPEED = 85; // px/s
 const ENEMY_SPEED = 45;
-const ATTACK_TIME = 220; // ms (удар игрока)
 const ENEMY_ATTACK_TIME = 300; // ms (удар гоблина)
 const INVULN_MS = 400; // неуязвимость после урона
 const MAX_HP = 3;
@@ -211,6 +210,8 @@ export default function CanvasGame() {
   const releaseAttack = () => virtualKeysRef.current.delete(" ");
 
   const DIE_DURATION_MS = (sprites.die.cols / sprites.die.fps) * 1000;
+  const ATTACK_TOTAL_MS =
+    (sprites.attackSword.cols / sprites.attackSword.fps) * 1000;
 
   const images = useMemo(() => {
     const o = {};
@@ -320,13 +321,40 @@ export default function CanvasGame() {
     };
     window.addEventListener("keydown", onKey, { passive: false });
 
+    // скользящее перемещение по препятствиям (диагональ → X → Y)
     function tryMove(ent, dx, dy) {
-      const nx = ent.x + dx,
-        ny = ent.y + dy,
-        rect = { x: nx, y: ny, w: ent.w, h: ent.h };
-      for (const s of solids) if (aabb(rect, s)) return;
-      ent.x = nx;
-      ent.y = ny;
+      const hits = (rect) => {
+        for (const s of solids) {
+          if (
+            !(
+              rect.x + rect.w <= s.x ||
+              s.x + s.w <= rect.x ||
+              rect.y + rect.h <= s.y ||
+              s.y + s.h <= rect.y
+            )
+          ) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      const full = { x: ent.x + dx, y: ent.y + dy, w: ent.w, h: ent.h };
+      if (!hits(full)) {
+        ent.x = full.x;
+        ent.y = full.y;
+        return;
+      }
+
+      const onlyX = { x: ent.x + dx, y: ent.y, w: ent.w, h: ent.h };
+      if (!hits(onlyX)) {
+        ent.x = onlyX.x;
+      }
+
+      const onlyY = { x: ent.x, y: ent.y + dy, w: ent.w, h: ent.h };
+      if (!hits(onlyY)) {
+        ent.y = onlyY.y;
+      }
     }
 
     function spriteKey(p) {
@@ -422,7 +450,7 @@ export default function CanvasGame() {
         if (mergedKeys.has("arrowdown") || mergedKeys.has("s")) my += 1;
       }
 
-      // атака игрока
+      // атака игрока (старт)
       if (
         player.hasSword &&
         (mergedKeys.has(" ") || mergedKeys.has("enter")) &&
@@ -470,7 +498,7 @@ export default function CanvasGame() {
         }
       }
 
-      // анимация игрока (включая смерть)
+      // === АНИМАЦИИ И СОСТОЯНИЯ ИГРОКА ===
       const pm =
         sprites[
           player.state === "die"
@@ -485,9 +513,12 @@ export default function CanvasGame() {
             ? "run"
             : "idle"
         ];
+
+      // тикаем кадры только для НЕ attack (attack управляется временем)
       player.acc += dt;
       if (player.acc >= 1 / pm.fps) {
         player.acc = 0;
+
         if (player.state === "die") {
           if (player.frame < pm.cols - 1) {
             player.frame += 1;
@@ -498,19 +529,28 @@ export default function CanvasGame() {
             setElapsedMs(ms);
             setGameOver(true);
           }
-        } else {
+        } else if (player.state !== "attack") {
           player.frame = (player.frame + 1) % pm.cols;
         }
       }
-      if (
-        player.state === "attack" &&
-        now - player.attackStartedAt > ATTACK_TIME
-      ) {
-        player.state = "idle";
-        player.frame = 0;
+
+      // ✅ Атака по времени: от 0-го до последнего кадра без зацикливания
+      if (player.state === "attack") {
+        const t = now - player.attackStartedAt; // мс с начала удара
+        const cols = sprites.attackSword.cols;
+        const fps = sprites.attackSword.fps;
+        const frameByTime = Math.min(cols - 1, Math.floor((t / 1000) * fps));
+        player.frame = frameByTime;
+
+        // завершение удара ровно по окончании спрайт-листа
+        if (t >= ATTACK_TOTAL_MS) {
+          player.state = "idle";
+          player.frame = 0;
+          player.acc = 0;
+        }
       }
 
-      // страховка по таймеру смерти
+      // страховка: смерть по таймеру (если по кадрам не дошло)
       if (player.state === "die") {
         if (player.dieStartedAt === 0) player.dieStartedAt = now;
         if (!player.dead && now - player.dieStartedAt >= DIE_DURATION_MS - 10) {
@@ -631,6 +671,7 @@ export default function CanvasGame() {
 
     function render() {
       // фон
+      const ctx = c.getContext("2d");
       ctx.fillStyle = "#223b27";
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       for (let y = 0; y < MAP.length; y++)
