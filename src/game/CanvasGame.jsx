@@ -170,7 +170,7 @@ function MobileJoystick({ onDirKeysChange, onAttackDown, onAttackUp }) {
         }}
       >
         <img
-          src="/assets/sword-pixel-attack.png"
+          src={asset("/assets/sword-pixel-attack.png")}
           className={styles.swordBtn}
           alt="attack"
         />
