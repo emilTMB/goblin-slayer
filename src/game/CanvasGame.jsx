@@ -186,6 +186,7 @@ export default function CanvasGame() {
   // overlay
   const [gameOver, setGameOver] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [kills, setKills] = useState(0);
   const startRef = useRef(performance.now());
 
   // мобильный порог
@@ -225,6 +226,7 @@ export default function CanvasGame() {
     startRef.current = performance.now();
     setGameOver(false);
     setElapsedMs(0);
+    setKills(0); // сбрасываем счётчик убийств при рестарте
 
     const c = canvasRef.current;
     const ctx = c.getContext("2d");
@@ -633,6 +635,7 @@ export default function CanvasGame() {
               g.state = "die";
               g.frame = 0;
               g.acc = 0;
+              setKills((k) => k + 1); // ✅ считаем убийство
             }
           }
         }
@@ -798,6 +801,7 @@ export default function CanvasGame() {
           <div className={styles.modal}>
             <h2>Игра окончена</h2>
             <p>Время: {(elapsedMs / 1000).toFixed(2)} сек.</p>
+            <p>Убито гоблинов: {kills}</p>
             <div
               className={styles.btn}
               onClick={() => setRestartKey((k) => k + 1)}
