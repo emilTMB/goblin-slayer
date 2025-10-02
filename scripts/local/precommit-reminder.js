@@ -18,9 +18,7 @@ rl.question(question, (answer) => {
   if (ok === "y" || ok === "yes" || ok === "д" || ok === "да") {
     process.exit(0);
   } else {
-    console.error(
-      "\n ❌ Коммит отменён. Проверьте блоки и попробуйте снова.\n"
-    );
+    console.error("\n❌ Коммит отменён. Проверьте блоки и попробуйте снова.\n");
     process.exit(1);
   }
 });
