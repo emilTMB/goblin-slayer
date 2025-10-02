@@ -1,4 +1,4 @@
-<!-- все содержимое закинуть в папку git/hooks назвать файл pre-commit БЕЗ РАСШИРЕНИЯ и если будет выдавать иероглифы пересохранить в UTF-8 BOM И НЕ ЗАБУДЬ САМ ФАЙЛ ЗАСУНУТЬ В git ignore-->
+<!-- все содержимое закинуть в папку git/hooks назвать файл pre-commit БЕЗ РАСШИРЕНИЯ и если будет выдавать иероглифы пересохранить в UTF-8 BOM И НЕ ЗАБУДЬ САМ ФАЙЛ ЗАСУНУТЬ В git ignore следующим образом - /local-scripts/local/**-->
 
 #!/bin/sh
 
@@ -48,8 +48,8 @@ fi
 
 if git config --local --get intern.enabled >/dev/null 2>&1; then
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-  REMINDER_JS="$REPO_ROOT/scripts/local/precommit-reminder.js"
-DIALOG_PS="$REPO_ROOT/scripts/local/precommit-dialog.ps1"
+  REMINDER_JS="$REPO_ROOT/local-scripts/local/precommit-reminder.js"
+DIALOG_PS="$REPO_ROOT/local-scripts/local/precommit-dialog.ps1"
   NODE_BIN="$(git config --local --get intern.node || command -v node || true)"
 
 if [ -t 0 ] && [ -t 1 ]; then # Есть TTY (коммит из терминала) — можно спрашивать
