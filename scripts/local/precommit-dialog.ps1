@@ -1,3 +1,4 @@
+﻿# scripts/local/precommit-dialog.ps1
 Add-Type -AssemblyName PresentationFramework
 
 $Xaml = @"
@@ -11,8 +12,14 @@ $Xaml = @"
   <StackPanel Margin="20">
     <TextBlock FontFamily="Segoe UI Emoji"
                FontSize="16"
-               TextWrapping="Wrap"
-               Text="🧱 Проверили, что нужные блоки существуют и корректно подключены? 🐈" />
+               TextWrapping="Wrap">
+      <Run Text="1. 🧱 Проверь, что нужные блоки существуют и корректно подключены?" />
+      <LineBreak/>
+      <Run Text="2.   Пробегись по БЕМ - все ли в порядке?🐈" />
+      <LineBreak/>
+      <Run Text="🐀Если нет уверенности в каком-то из пунктов - бегом править!🐀" />
+    </TextBlock>
+
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
       <Button Name="YesBtn" MinWidth="90" Margin="0,0,8,0">Да</Button>
       <Button Name="NoBtn" MinWidth="90">Нет</Button>
