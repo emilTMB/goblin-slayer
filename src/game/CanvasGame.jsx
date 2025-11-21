@@ -194,6 +194,7 @@ function loadImage(src) {
   i.crossOrigin = "anonymous";
   return i;
 }
+
 function aabb(a, b) {
   return !(
     a.x + a.w <= b.x ||
@@ -341,7 +342,7 @@ function MobileJoystick({
             <img
               src="assets/utils-png/star.png"
               className={styles.swordBtn}
-              alt="attack"
+              alt="ability"
             />
           </span>
         </button>
@@ -385,12 +386,27 @@ export default function CanvasGame() {
   // HUD по оружию (для DOM-текста)
   const [weaponHud, setWeaponHud] = useState("нет");
 
+  // масштаб игры (не даём спрайтам искажаться)
+  const [scale, setScale] = useState(1);
+
   // мобильный порог
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < MOBILE_WIDTH : true
   );
+
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < MOBILE_WIDTH);
+    const onResize = () => {
+      setIsMobile(window.innerWidth < MOBILE_WIDTH);
+
+      // пересчитываем масштаб так, чтобы 320×240 влезло в окно без искажения
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      const s = Math.floor(Math.min(vw / VIEW_W, vh / VIEW_H));
+      setScale(s > 0 ? s : 1);
+    };
+
+    onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -451,6 +467,8 @@ export default function CanvasGame() {
     const c = canvasRef.current;
     const ctx = c.getContext("2d");
     ctx.imageSmoothingEnabled = false;
+
+    // логический размер
     c.width = VIEW_W;
     c.height = VIEW_H;
 
@@ -1473,8 +1491,15 @@ export default function CanvasGame() {
   }, [images, keys, restartKey, playerClass, setWeaponHud]);
 
   return (
-    <div className={styles.canvasWrap} style={{ position: "relative" }}>
-      <canvas ref={canvasRef} className={styles.canvas} />
+    <div className={styles.canvasWrap}>
+      <canvas
+        ref={canvasRef}
+        className={styles.canvas}
+        style={{
+          width: `${VIEW_W * scale}px`,
+          height: `${VIEW_H * scale}px`,
+        }}
+      />
 
       {playerClass && (
         <div className={styles.classWrapper}>

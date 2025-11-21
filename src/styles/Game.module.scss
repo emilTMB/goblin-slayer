@@ -18,48 +18,50 @@ $app-bg: #0e0f13;
 }
 
 .hint {
+  background: radial-gradient(60% 60% at 50% 40%, #1a1f2a, $app-bg);
+  padding: 10px;
   opacity: 0.8;
   font-size: 14px;
   margin: 8px 24px 12px;
   text-align: center;
+  position: relative;
+  bottom: -80px;
 
   @media (max-width: 1280px) {
     display: none;
   }
 }
 
+/* === ОБЁРТКА ИГРЫ — ВСЕГДА НА ВЕСЬ ЭКРАН === */
 .canvasWrap {
-  position: relative;
-  padding: 8px;
-  border-radius: 14px;
+  position: fixed;
+  inset: 0;
+  padding: 0;
+  border-radius: 0;
   background: #0b0d11;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: none;
+
+  display: grid;
+  place-items: center;
 }
 
+/* Канвас: размер задаётся через inline-style (JS), чтобы масштабировать без искажений */
 .canvas {
   image-rendering: pixelated;
-  width: 640px; // масштаб отображения
-  height: 480px;
-  // width: 1280px; // было 640px
-  // height: 960px; // было 480px
+  image-rendering: crisp-edges;
   background: #1a1e25;
-  border-radius: 8px;
+  border-radius: 0;
   display: block;
-
-  @media (max-width: 700px) {
-    width: 100%;
-    height: auto;
-  }
 }
 
+/* Оверлеи (выбор класса / конец игры) — поверх канваса */
 .overlay {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.6);
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .modal {
@@ -137,6 +139,9 @@ $app-bg: #0e0f13;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  /* чтобы было приятно возвращаться в центр */
+  transition: transform 80ms ease-out;
+  will-change: transform;
 }
 
 .attackBtn {
@@ -145,8 +150,6 @@ $app-bg: #0e0f13;
   margin-right: 8px;
   width: 90px;
   height: 90px;
-  // border-radius: 50%;
-  // background: radial-gradient(circle at 30% 30%, #ffefef, #e24a4a);
   background: #e24a4a;
   border: none;
   color: #fff;
@@ -176,65 +179,6 @@ $app-bg: #0e0f13;
   user-select: none;
 }
 
-@media (max-width: 1280px) {
-  /* обёртка занимает весь экран */
-  .canvasWrap {
-    position: fixed;
-    inset: 0;
-    padding: 0;
-    border-radius: 0;
-    background: #0b0d11;
-    box-shadow: none;
-
-    display: grid;
-    place-items: center;
-  }
-
-  .canvas {
-    width: 100vw;
-    height: auto;
-    max-height: 100vh;
-    aspect-ratio: 4 / 3;
-    border-radius: 0;
-  }
-
-  .mobileUI {
-    padding-bottom: 20px;
-  }
-}
-
-.joystick {
-  pointer-events: auto;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 255, 255, 0.06),
-    rgba(0, 0, 0, 0.2)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  position: relative;
-  touch-action: none;
-  user-select: none;
-}
-
-.joystickDot {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 44px;
-  height: 44px;
-  margin-left: -22px;
-  margin-top: -22px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  /* чтобы было приятно возвращаться в центр */
-  transition: transform 80ms ease-out;
-  will-change: transform;
-}
-
 .btns {
   display: flex;
   align-items: center;
@@ -249,9 +193,7 @@ $app-bg: #0e0f13;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
   font-size: 16px;
-  // width: 303px;
   font-family: "monospace";
-  /* border-radius: 4px; */
   pointer-events: none;
 }
 
