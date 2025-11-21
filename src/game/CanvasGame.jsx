@@ -145,7 +145,6 @@ const goblinSprites = {
 };
 
 // === МИРЫ / ЛОКАЦИИ ===
-// Можно добавлять новые карты: overworld, dungeon1, dungeon2 и т.д.
 const WORLDS = {
   overworld: {
     name: "Поверхность",
@@ -253,7 +252,7 @@ const WORLDS = {
     ],
     defaultSpawn: { tx: 2, ty: 8 },
     spawnPoints: [{ x: 6, y: 5 }],
-    weaponTiles: [], // тут пока нет оружия
+    weaponTiles: [],
     exits: [
       {
         tx: -1,
@@ -530,8 +529,13 @@ export default function CanvasGame() {
   const startRef = useRef(performance.now());
 
   // глобальные HP и оружие (сохраняются между переходами по картам)
-  const hpRef = useRef(null); // число HP
-  const weaponRef = useRef(null); // "sword" | "bow" | "staff" | null
+  const hpRef = useRef(null);
+  const weaponRef = useRef(null);
+
+  // === PERSISTENT LOOT ===
+  // храним инфу о собранных предметах между переходами по картам
+  // структура: { [mapId]: { weapons: { [key]: true } } }
+  const globalLootRef = useRef({});
 
   // HUD по оружию (для DOM-текста)
   const [weaponHud, setWeaponHud] = useState("нет");
@@ -548,7 +552,6 @@ export default function CanvasGame() {
     const onResize = () => {
       setIsMobile(window.innerWidth < MOBILE_WIDTH);
 
-      // пересчитываем масштаб так, чтобы 320×240 влезло в окно без искажения
       const vw = window.innerWidth;
       const vh = window.innerHeight;
 
@@ -579,7 +582,6 @@ export default function CanvasGame() {
     if (weaponHud === "sword") return ICONS.sword;
     if (weaponHud === "bow") return ICONS.bow;
     if (weaponHud === "staff") return ICONS.staff;
-    // по умолчанию меч
     return ICONS.sword;
   }, [weaponHud]);
 
@@ -592,7 +594,6 @@ export default function CanvasGame() {
     for (const k in goblinSprites)
       o["g_" + k] = loadImage(goblinSprites[k].src);
 
-    // иконки лута для канвы
     o.loot_sword = loadImage(ICONS.sword);
     o.loot_bow = loadImage(ICONS.bow);
     o.loot_staff = loadImage(ICONS.staff);
@@ -602,7 +603,7 @@ export default function CanvasGame() {
   }, [restartKey, playerClass]);
 
   useEffect(() => {
-    if (!playerClass) return; // пока класс не выбран — не запускаем игру
+    if (!playerClass) return;
 
     const world = WORLDS[mapId];
     if (!world) return;
@@ -616,19 +617,17 @@ export default function CanvasGame() {
     const MAX_HP = cfg.maxHp;
     const PLAYER_SPEED = cfg.speed;
 
-    // Определяем, это вход через портал или новый забег
     const isPortalSpawn = spawnInfo && spawnInfo.mapId === mapId;
 
-    // Если это новый ран (нет spawnInfo для этой карты) — сбрасываем HP/оружие
     if (!isPortalSpawn) {
       hpRef.current = MAX_HP;
       weaponRef.current = null;
+      // при новом забеге (не через портал) — лут на этой карте тоже можно было бы сбросить,
+      // но мы сбрасываем весь лут глобально при нажатии R/«Играть снова»
     } else {
-      // если пришли через портал и HP ещё не инициализирован — выставим по умолчанию
       if (hpRef.current == null) hpRef.current = MAX_HP;
     }
 
-    // обновляем HUD по оружию
     setWeaponHud(weaponRef.current || "нет");
 
     startRef.current = performance.now();
@@ -640,11 +639,9 @@ export default function CanvasGame() {
     const ctx = c.getContext("2d");
     ctx.imageSmoothingEnabled = false;
 
-    // логический размер
     c.width = VIEW_W;
     c.height = VIEW_H;
 
-    // препятствия и свободные тайлы
     const solids = [];
     const floorTiles = [];
     for (let y = 0; y < MAP.length; y++) {
@@ -655,18 +652,27 @@ export default function CanvasGame() {
       }
     }
 
-    // пикапы оружия (перегенерятся при входе на карту; оружие у игрока сохраняется отдельно)
-    const weaponPickups = WEAPON_TILES.map((w) => ({
-      type: w.type,
-      color: w.color,
-      x: w.x * TILE + TILE / 4,
-      y: w.y * TILE + TILE / 4,
-      w: TILE / 2,
-      h: TILE / 2,
-      picked: false,
-    }));
+    // === PERSISTENT LOOT ===
+    // читаем, какие оружия уже подобраны на этой карте
+    const globalWeapons =
+      (globalLootRef.current[mapId] && globalLootRef.current[mapId].weapons) ||
+      {};
 
-    // выбираем спавн для игрока
+    const weaponPickups = WEAPON_TILES.map((w) => {
+      const key = `${w.x},${w.y},${w.type}`;
+      const picked = !!globalWeapons[key];
+      return {
+        key,
+        type: w.type,
+        color: w.color,
+        x: w.x * TILE + TILE / 4,
+        y: w.y * TILE + TILE / 4,
+        w: TILE / 2,
+        h: TILE / 2,
+        picked,
+      };
+    });
+
     const spawn =
       spawnInfo && spawnInfo.mapId === mapId
         ? spawnInfo
@@ -677,17 +683,16 @@ export default function CanvasGame() {
       MAX_HP
     );
 
-    // игрок
     const player = {
       x: spawn.tx * TILE,
       y: spawn.ty * TILE,
       w: FRAME_W,
       h: FRAME_H,
       dir: 1,
-      state: "sleep", // sleep | idle | run | attack | die | blink | ability
+      state: "sleep",
       frame: 0,
       acc: 0,
-      weapon: weaponRef.current, // sword | bow | staff | null
+      weapon: weaponRef.current,
       attackStartedAt: 0,
       hp: startHp,
       hurtAt: -9999,
@@ -698,10 +703,9 @@ export default function CanvasGame() {
       abilityCooldownMs: cfg.abilityCooldownMs,
       blinkStartedAt: 0,
       blinkTargetX: null,
-      abilityAnimStartedAt: 0, // для анимации скиллов (slam)
+      abilityAnimStartedAt: 0,
     };
 
-    // === Гоблины ===
     function makeGoblin(tileX, tileY) {
       return {
         x: tileX * TILE,
@@ -709,7 +713,7 @@ export default function CanvasGame() {
         w: GOB_W,
         h: GOB_H,
         dir: -1,
-        state: "idle", // idle | run | attack | die
+        state: "idle",
         frame: 0,
         acc: 0,
         attackStartedAt: 0,
@@ -720,8 +724,6 @@ export default function CanvasGame() {
         knockbackVx: 0,
         knockbackVy: 0,
         knockbackEndAt: 0,
-
-        // DoT от стрелы
         dotType: null,
         dotNextTickAt: 0,
         dotTicksLeft: 0,
@@ -734,18 +736,12 @@ export default function CanvasGame() {
     }
     let nextSpawnAt = performance.now() + 4000;
 
-    // === Сердца (хил) ===
     const hearts = [];
     let nextHeartAt = performance.now() + HEART_SPAWN_INTERVAL_MS;
 
-    // ловушки разбойника
-    const traps = []; // {x,y,w,h,createdAt,durationMs}
-
-    // проджектайлы
-    const projectiles = []; // {type,x,y,vx,vy,radius}
-
-    // визуальные взрывы фаербола
-    const explosions = []; // {x, y, r, createdAt}
+    const traps = [];
+    const projectiles = [];
+    const explosions = [];
 
     function spawnHeart(now) {
       if (hearts.length >= MAX_HEARTS) return;
@@ -764,7 +760,6 @@ export default function CanvasGame() {
 
     const cam = { x: 0, y: 0 };
 
-    // Инициализируем камеру около игрока И сразу зажимаем в пределах карты
     {
       const worldW = MAP[0].length * TILE;
       const worldH = MAP.length * TILE;
@@ -786,14 +781,14 @@ export default function CanvasGame() {
     const onKey = (e) => {
       if (e.key.toLowerCase() === "r") {
         running = false;
-        // новый забег — очищаем spawnInfo, чтобы стартовать с defaultSpawn
         setSpawnInfo(null);
+        // === PERSISTENT LOOT RESET ON NEW RUN ===
+        globalLootRef.current = {};
         setRestartKey((k) => k + 1);
       }
     };
     window.addEventListener("keydown", onKey, { passive: false });
 
-    // helper для коллизий
     const hitsSolids = (rect) => {
       for (const s of solids) {
         if (
@@ -810,7 +805,6 @@ export default function CanvasGame() {
       return false;
     };
 
-    // скользящее перемещение
     function tryMove(ent, dx, dy) {
       const full = { x: ent.x + dx, y: ent.y + dy, w: ent.w, h: ent.h };
       if (!hitsSolids(full)) {
@@ -835,7 +829,7 @@ export default function CanvasGame() {
       if (p.state === "die") return PLAYER_FRAMES.die;
       if (p.state === "blink") return PLAYER_FRAMES.blink;
       if (p.state === "attack") return PLAYER_FRAMES.attack;
-      if (p.state === "ability") return PLAYER_FRAMES.attack; // анимация скилла как атакующая
+      if (p.state === "ability") return PLAYER_FRAMES.attack;
       if (p.state === "run") return PLAYER_FRAMES.run;
       return PLAYER_FRAMES.idle;
     }
@@ -847,11 +841,9 @@ export default function CanvasGame() {
 
       const wRows = p.weapon ? PLAYER_WEAPON_ROWS[p.weapon] : null;
 
-      // Анимация скилла (например, slam воина)
       if (p.state === "ability") {
-        // ВСЕГДА играем строку 115, если это slam, неважно какое оружие
         if (p.abilityType === "slam") {
-          return PLAYER_ABILITY_ROWS.slam; // строка 115
+          return PLAYER_ABILITY_ROWS.slam;
         }
         if (wRows) return wRows.attack;
         return PLAYER_ROWS_BASE.run;
@@ -944,7 +936,6 @@ export default function CanvasGame() {
     function update(dt, now) {
       const mergedKeys = new Set([...keys.current, ...virtualKeysRef.current]);
 
-      // сон до первого ввода
       if (player.state === "sleep") {
         if (mergedKeys.size > 0) {
           player.state = "idle";
@@ -961,11 +952,9 @@ export default function CanvasGame() {
         }
       }
 
-      // спавны по таймеру
       if (now >= nextSpawnAt) spawnGoblin(now);
       if (now >= nextHeartAt) spawnHeart(now);
 
-      // ввод (если персонаж жив)
       let mx = 0,
         my = 0;
       if (
@@ -985,7 +974,6 @@ export default function CanvasGame() {
         if (mergedKeys.has("arrowdown") || mergedKeys.has("s")) my += 1;
       }
 
-      // атака
       const attackPressed =
         (mergedKeys.has(" ") || mergedKeys.has("enter")) &&
         player.state !== "attack" &&
@@ -1007,7 +995,6 @@ export default function CanvasGame() {
         }
       }
 
-      // движение игрока (не двигаемся во время атаки, блинка и скилла)
       const len = Math.hypot(mx, my) || 1;
       if (
         player.state !== "attack" &&
@@ -1031,7 +1018,7 @@ export default function CanvasGame() {
         player.state = "idle";
       }
 
-      // === ПРОВЕРКА: НАСТУПИЛ ЛИ ИГРОК НА ВЫХОД ===
+      // === ПРОВЕРКА ВЫХОДА НА ДРУГУЮ КАРТУ ===
       {
         const centerX = player.x + player.w / 2;
         const centerY = player.y + player.h / 2;
@@ -1041,37 +1028,36 @@ export default function CanvasGame() {
         const exit = EXIT_TILES.find((e) => e.tx === tileX && e.ty === tileY);
 
         if (exit) {
-          // Останавливаем текущий цикл
           running = false;
-
-          // Запоминаем, куда ставить игрока в новой карте
           setSpawnInfo({
             mapId: exit.targetWorld,
             tx: exit.targetSpawn.tx,
             ty: exit.targetSpawn.ty,
           });
-
-          // Переходим на другую карту, HP и оружие уже сохранены в hpRef/weaponRef
           setMapId(exit.targetWorld);
-
-          return; // выходим из update, дальше не обновляем эту карту
+          return;
         }
       }
 
-      // подбор оружия
+      // ПОДБОР ОРУЖИЯ (с сохранением между картами)
       for (const w of weaponPickups) {
         if (!w.picked && aabb(player, w)) {
           w.picked = true;
           player.weapon = w.type;
-          weaponRef.current = w.type; // сохраняем между картами
+          weaponRef.current = w.type;
           setWeaponHud(w.type);
           player.state = "idle";
           player.frame = 0;
           player.acc = 0;
+
+          // === PERSISTENT LOOT: запоминаем, что этот предмет на этой карте подобран ===
+          if (!globalLootRef.current[mapId]) {
+            globalLootRef.current[mapId] = { weapons: {} };
+          }
+          globalLootRef.current[mapId].weapons[w.key] = true;
         }
       }
 
-      // ПОДБОР СЕРДЕЦ
       for (let i = hearts.length - 1; i >= 0; i--) {
         const h = hearts[i];
         if (now - h.createdAt >= HEART_DESPAWN_MS) {
@@ -1080,12 +1066,11 @@ export default function CanvasGame() {
         }
         if (!player.dead && aabb(player, h) && player.hp < MAX_HP) {
           player.hp = Math.min(MAX_HP, player.hp + HEART_HEAL);
-          hpRef.current = player.hp; // сохраняем HP
+          hpRef.current = player.hp;
           hearts.splice(i, 1);
         }
       }
 
-      // === АНИМАЦИИ И СОСТОЯНИЯ ИГРОКА ===
       const animMeta = getPlayerAnimMeta(player);
 
       player.acc += dt;
@@ -1093,7 +1078,6 @@ export default function CanvasGame() {
         player.acc = 0;
 
         if (player.state === "die") {
-          // проигрываем анимацию смерти и только после этого — game over
           if (player.frame < animMeta.cols - 1) {
             player.frame += 1;
           } else if (!player.dead) {
@@ -1112,7 +1096,6 @@ export default function CanvasGame() {
         }
       }
 
-      // Атака по времени
       if (player.state === "attack") {
         const t = now - player.attackStartedAt;
         const cols = PLAYER_FRAMES.attack.cols;
@@ -1127,7 +1110,6 @@ export default function CanvasGame() {
         }
       }
 
-      // Анимация скилла (например slam)
       if (player.state === "ability") {
         const t = now - player.abilityAnimStartedAt;
         const cols = PLAYER_FRAMES.attack.cols;
@@ -1142,7 +1124,6 @@ export default function CanvasGame() {
         }
       }
 
-      // Блинк по времени (анимация, телепорт в конце)
       if (player.state === "blink") {
         const t = now - player.blinkStartedAt;
         const cols = PLAYER_FRAMES.blink.cols;
@@ -1163,7 +1144,6 @@ export default function CanvasGame() {
 
       const playerInvuln = now - player.hurtAt < INVULN_MS;
 
-      // === СПОСОБНОСТЬ КЛАССА (кнопка Q) ===
       const abilityPressed =
         (mergedKeys.has("q") || mergedKeys.has("й")) &&
         now - player.abilityLastUsedAt >= player.abilityCooldownMs &&
@@ -1175,7 +1155,6 @@ export default function CanvasGame() {
 
       if (abilityPressed) {
         if (player.abilityType === "blink") {
-          // БЛИНК МАГА: считаем целевую точку, но не двигаем сразу
           const maxDist = TILE * 3;
           const step = TILE / 4;
           const dirX = player.dir || 1;
@@ -1195,7 +1174,6 @@ export default function CanvasGame() {
           player.acc = 0;
           player.blinkStartedAt = now;
         } else if (player.abilityType === "trap") {
-          // ЛОВУШКА РАЗБОЙНИКА
           traps.push({
             x: player.x + player.w / 4,
             y: player.y + (player.h * 2) / 3,
@@ -1205,7 +1183,6 @@ export default function CanvasGame() {
             durationMs: 6000,
           });
         } else if (player.abilityType === "slam") {
-          // УДАР ВОИНА ПО ПЛОЩАДИ С ПЛАВНЫМ НОКБЭКОМ + АНИМАЦИЯ 115
           const radius = TILE * 2.5;
           const kbDist = TILE * 2.5;
           const kbDurSec = KNOCKBACK_DURATION_MS / 1000;
@@ -1232,7 +1209,6 @@ export default function CanvasGame() {
             }
           }
 
-          // включаем отдельное состояние ability -> анимация со строки 115
           player.state = "ability";
           player.frame = 0;
           player.acc = 0;
@@ -1241,11 +1217,9 @@ export default function CanvasGame() {
         player.abilityLastUsedAt = now;
       }
 
-      // === ИИ и анимации гоблинов ===
       for (const g of goblins) {
         if (g.dead) continue;
 
-        // DoT от стрелы
         if (
           g.dotType === "arrow" &&
           g.dotTicksLeft > 0 &&
@@ -1262,17 +1236,15 @@ export default function CanvasGame() {
           }
         }
 
-        // ПЛАВНЫЙ НОКБЭК
         if (g.knockbackEndAt && now < g.knockbackEndAt) {
           tryMove(g, g.knockbackVx * dt, g.knockbackVy * dt);
         } else {
-          // сбрасываем нокбэк
           g.knockbackEndAt = 0;
           g.knockbackVx = 0;
           g.knockbackVy = 0;
 
           if (g.stunnedUntil && now < g.stunnedUntil) {
-            // стоим, только анимация
+            // стоим
           } else {
             const dx = player.x - g.x;
             const dy = player.y - g.y;
@@ -1323,7 +1295,6 @@ export default function CanvasGame() {
         }
       }
 
-      // ловушки: обновление и оглушение
       for (let ti = traps.length - 1; ti >= 0; ti--) {
         const t = traps[ti];
         if (now - t.createdAt > t.durationMs) {
@@ -1346,7 +1317,6 @@ export default function CanvasGame() {
         }
       }
 
-      // урон гоблинам от меча
       if (player.state === "attack" && player.weapon === "sword") {
         const hb = attackHitbox(player);
         for (const g of goblins) {
@@ -1363,7 +1333,6 @@ export default function CanvasGame() {
         }
       }
 
-      // проджектайлы
       for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
         p.x += p.vx * dt;
@@ -1443,14 +1412,13 @@ export default function CanvasGame() {
         }
       }
 
-      // урон игроку от гоблинов
       for (const g of goblins) {
         if (g.dead || g.state !== "attack" || player.dead) continue;
         const gb = goblinHitbox(g);
         if (!playerInvuln && aabb(gb, player)) {
           player.hp = Math.max(0, player.hp - 1);
           player.hurtAt = now;
-          hpRef.current = player.hp; // сохраняем HP
+          hpRef.current = player.hp;
           if (player.hp <= 0 && player.state !== "die") {
             player.state = "die";
             player.frame = 0;
@@ -1463,12 +1431,10 @@ export default function CanvasGame() {
         }
       }
 
-      // подчистка мёртвых гоблинов
       for (let i = goblins.length - 1; i >= 0; i--) {
         if (goblins[i].dead) goblins.splice(i, 1);
       }
 
-      // ПЛАВНАЯ КАМЕРА (с учётом границ карты)
       const worldW = MAP[0].length * TILE;
       const worldH = MAP.length * TILE;
       const maxCamX = worldW - VIEW_W;
@@ -1495,7 +1461,6 @@ export default function CanvasGame() {
       const camX = Math.round(cam.x);
       const camY = Math.round(cam.y);
 
-      // фон
       ctx.fillStyle = "#223b27";
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       for (let y = 0; y < MAP.length; y++)
@@ -1509,7 +1474,6 @@ export default function CanvasGame() {
       ctx.lineWidth = 1;
       ctx.strokeRect(-0.5, -0.5, VIEW_W + 1, VIEW_H + 1);
 
-      // пикапы оружия (PNG иконки)
       for (const w of weaponPickups) {
         if (w.picked) continue;
         const dx = w.x - camX;
@@ -1526,7 +1490,6 @@ export default function CanvasGame() {
         }
       }
 
-      // СЕРДЦА (PNG иконка)
       for (const h of hearts) {
         const dx = h.x - camX;
         const dy = h.y - camY;
@@ -1545,7 +1508,6 @@ export default function CanvasGame() {
         }
       }
 
-      // ловушки
       for (const t of traps) {
         const dx = t.x - camX;
         const dy = t.y - camY;
@@ -1555,7 +1517,6 @@ export default function CanvasGame() {
         ctx.strokeRect(dx, dy, t.w, t.h);
       }
 
-      // проджектайлы
       for (const p of projectiles) {
         const dx = p.x - camX;
         const dy = p.y - camY;
@@ -1581,7 +1542,6 @@ export default function CanvasGame() {
         }
       }
 
-      // взрывы фаербола
       for (let i = explosions.length - 1; i >= 0; i--) {
         const ex = explosions[i];
         const age = lastNow - ex.createdAt;
@@ -1611,7 +1571,6 @@ export default function CanvasGame() {
         ctx.restore();
       }
 
-      // гоблины
       for (const g of goblins) {
         const gkey = goblinSpriteKey(g);
         const gimg = gkey ? images[gkey] : null;
@@ -1644,7 +1603,6 @@ export default function CanvasGame() {
         }
       }
 
-      // игрок
       {
         const pimg = images.player;
         if (!pimg || !pimg.complete) return;
@@ -1678,7 +1636,6 @@ export default function CanvasGame() {
         }
       }
 
-      // UI HP (на канве)
       ctx.fillStyle = "#000";
       ctx.fillRect(8, 8, 120, 10);
       ctx.fillStyle = "#f44";
@@ -1711,7 +1668,6 @@ export default function CanvasGame() {
         </div>
       )}
 
-      {/* Мобильный UI */}
       {isMobile && playerClass && (
         <MobileJoystick
           onDirKeysChange={setDirKeys}
@@ -1723,7 +1679,6 @@ export default function CanvasGame() {
         />
       )}
 
-      {/* Выбор класса до начала игры */}
       {!playerClass && (
         <div className={styles.overlay}>
           <div className={styles.modal}>
@@ -1737,6 +1692,7 @@ export default function CanvasGame() {
                   setSpawnInfo(null);
                   hpRef.current = null;
                   weaponRef.current = null;
+                  globalLootRef.current = {}; // лут тоже очищаем
                   setWeaponHud("нет");
                   setPlayerClass("warrior");
                 }}
@@ -1750,6 +1706,7 @@ export default function CanvasGame() {
                   setSpawnInfo(null);
                   hpRef.current = null;
                   weaponRef.current = null;
+                  globalLootRef.current = {};
                   setWeaponHud("нет");
                   setPlayerClass("rogue");
                 }}
@@ -1763,6 +1720,7 @@ export default function CanvasGame() {
                   setSpawnInfo(null);
                   hpRef.current = null;
                   weaponRef.current = null;
+                  globalLootRef.current = {};
                   setWeaponHud("нет");
                   setPlayerClass("wizard");
                 }}
@@ -1774,7 +1732,6 @@ export default function CanvasGame() {
         </div>
       )}
 
-      {/* Оверлей конца игры */}
       {gameOver && playerClass && (
         <div className={styles.overlay}>
           <div className={styles.modal}>
@@ -1785,8 +1742,8 @@ export default function CanvasGame() {
               <div
                 className={styles.btn}
                 onClick={() => {
-                  // новый забег на текущей карте
                   setSpawnInfo(null);
+                  globalLootRef.current = {}; // новый забег — новый лут
                   setRestartKey((k) => k + 1);
                 }}
               >
@@ -1795,13 +1752,13 @@ export default function CanvasGame() {
               <div
                 className={styles.btn}
                 onClick={() => {
-                  // сбрасываем игру и возвращаемся к выбору класса
                   setGameOver(false);
                   setPlayerClass(null);
                   setMapId("overworld");
                   setSpawnInfo(null);
                   hpRef.current = null;
                   weaponRef.current = null;
+                  globalLootRef.current = {};
                   setWeaponHud("нет");
                 }}
               >
