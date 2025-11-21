@@ -9,7 +9,7 @@ export default function App() {
       <CanvasGame />
       <p className={styles.hint}>
         ВАЖНО - использкуйте английскую раскладку клавиатуры! <br />
-        WASD/←↑→↓ — движение • Space — удар • R — перезапуск
+        WASD/←↑→↓ — движение • Space — удар • R — перезапуск • Q — способность
       </p>
     </div>
   );

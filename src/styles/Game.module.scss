@@ -41,6 +41,8 @@ $app-bg: #0e0f13;
   image-rendering: pixelated;
   width: 640px; // масштаб отображения
   height: 480px;
+  // width: 1280px; // было 640px
+  // height: 960px; // было 480px
   background: #1a1e25;
   border-radius: 8px;
   display: block;
@@ -231,4 +233,30 @@ $app-bg: #0e0f13;
   /* чтобы было приятно возвращаться в центр */
   transition: transform 80ms ease-out;
   will-change: transform;
+}
+
+.btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.classWrapper {
+  position: absolute;
+  left: 20px;
+  top: 58px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 16px;
+  // width: 303px;
+  font-family: "monospace";
+  /* border-radius: 4px; */
+  pointer-events: none;
+}
+
+.btnsMobile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }

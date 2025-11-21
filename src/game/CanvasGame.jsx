@@ -3,38 +3,141 @@ import styles from "../styles/Game.module.scss";
 import useKeyboard from "./useKeyboard";
 
 const asset = (p) => `${import.meta.env.BASE_URL}${p.replace(/^\//, "")}`;
-/** === МЕТА ПОД СПРАЙТЫ ===
- * Все листы — один ряд, вправо. Кадр 16×24.
+
+/** === РАЗМЕРЫ КАДРОВ / ТАЙЛОВ ===
+ * В исходных спрайтах кадр 16×24.
  */
-const FRAME_W = 16;
-const FRAME_H = 24;
+const FRAME_SRC_W = 16;
+const FRAME_SRC_H = 24;
+const FRAME_W = FRAME_SRC_W;
+const FRAME_H = FRAME_SRC_H;
+
+const GOB_SRC_W = 16;
+const GOB_SRC_H = 24;
+const GOB_W = GOB_SRC_W;
+const GOB_H = GOB_SRC_H;
+
 const TILE = 32;
 
+// Окно камеры (логический размер)
 const VIEW_W = 320;
 const VIEW_H = 240;
 
-const PLAYER_SPEED = 85; // px/s
+// Базовые константы
+const BASE_PLAYER_SPEED = 85; // px/s
 const ENEMY_SPEED = 45;
-const ENEMY_ATTACK_TIME = 300; // ms (удар гоблина)
-const INVULN_MS = 400; // неуязвимость после урона
-const MAX_HP = 3;
+const ENEMY_ATTACK_TIME = 300; // ms
+const INVULN_MS = 400;
+const BASE_MAX_HP = 3;
+
+// Взрыв фаербола
+const STAFF_EXPLOSION_MS = 250; // сколько живёт эффект взрыва
 
 // Порог для мобильного UI
 const MOBILE_WIDTH = 1280;
 
-const sprites = {
-  idle: { src: asset("assets/idle.png"), cols: 4, fps: 6 },
-  run: { src: asset("assets/run.png"), cols: 4, fps: 10 },
-  die: { src: asset("assets/die.png"), cols: 4, fps: 6 },
-  sleep: { src: asset("assets/sleep.png"), cols: 6, fps: 5 },
-  idleSword: { src: asset("assets/idle-sword.png"), cols: 4, fps: 6 },
-  runSword: { src: asset("assets/run-sword.png"), cols: 4, fps: 10 },
-  attackSword: { src: asset("assets/attack-sword.png"), cols: 6, fps: 14 },
+// Плавность камеры (чем больше, тем быстрее догоняет)
+const CAM_LERP = 10;
+
+// Длительность нокбэка
+const KNOCKBACK_DURATION_MS = 250;
+
+// ==== ПУТИ К ИКОНКАМ ЛУТА / UI ====
+const ICONS = {
+  sword: asset("/assets/utils-png/sword-pixel-attack.png"),
+  bow: asset("/assets/utils-png/bow-pixel-attack.png"),
+  staff: asset("/assets/utils-png/staff-pixel-attack.png"),
+  heart: asset("/assets/utils-png/heart-pixel.png"),
 };
 
+// ==== КЛАССЫ ПЕРСОНАЖА ====
+const CLASS_CONFIG = {
+  warrior: {
+    name: "Воин",
+    spriteSheet: asset("assets/player-animation/fiter/sprite_.png"),
+    maxHp: 5,
+    speed: BASE_PLAYER_SPEED - 40, // замедлили воина
+    ability: "slam",
+    abilityCooldownMs: 1500,
+  },
+  rogue: {
+    name: "Разбойник",
+    spriteSheet: asset("assets/player-animation/rouge/sprite_.png"),
+    maxHp: BASE_MAX_HP,
+    speed: BASE_PLAYER_SPEED * 1.5,
+    ability: "trap",
+    abilityCooldownMs: 1500,
+  },
+  wizard: {
+    name: "Маг",
+    spriteSheet: asset("assets/player-animation/wizard/sprite_.png"),
+    maxHp: BASE_MAX_HP,
+    speed: BASE_PLAYER_SPEED * 0.9,
+    ability: "blink",
+    abilityCooldownMs: 1000,
+  },
+};
+
+// === АНИМАЦИИ ИГРОКА ===
+
+// Базовые строки (без оружия, индексы по 0)
+const PLAYER_ROWS_BASE = {
+  idle: 0,
+  run: 1,
+  sleep: 36,
+  die: 3,
+};
+
+const BLINK_ROW = 47; // строка анимации блинка
+
+// DoT от стрелы
+const ARROW_HIT_DAMAGE = 1; // урон при попадании
+const ARROW_DOT_DAMAGE = 1; // урон за тик
+const ARROW_DOT_TICKS = 3; // сколько тиков после первого удара
+const ARROW_DOT_INTERVAL_MS = 600; // интервал между тиками
+
+// Строки для оружия
+const PLAYER_WEAPON_ROWS = {
+  sword: {
+    idle: 91,
+    run: 97,
+    attack: 112, // обычная атака
+  },
+  bow: {
+    idle: 95,
+    run: 101,
+    attack: 104,
+  },
+  staff: {
+    idle: 93,
+    run: 99,
+    attack: 113,
+  },
+};
+
+// Строки для АБИЛОК
+const PLAYER_ABILITY_ROWS = {
+  // скилл воина (отбрасывание) — строка 115
+  slam: 115,
+};
+
+// Кол-во кадров и FPS
+const PLAYER_FRAMES = {
+  idle: { cols: 4, fps: 6 },
+  run: { cols: 4, fps: 10 },
+  attack: { cols: 6, fps: 14 },
+  die: { cols: 4, fps: 6 },
+  sleep: { cols: 6, fps: 5 },
+  blink: { cols: 6, fps: 14 },
+};
+
+const DIE_DURATION_MS = (PLAYER_FRAMES.die.cols / PLAYER_FRAMES.die.fps) * 1000;
+const ATTACK_TOTAL_MS =
+  (PLAYER_FRAMES.attack.cols / PLAYER_FRAMES.attack.fps) * 1000;
+const BLINK_DURATION_MS =
+  (PLAYER_FRAMES.blink.cols / PLAYER_FRAMES.blink.fps) * 1000;
+
 // === СПРАЙТЫ ГОБЛИНА ===
-const GOB_W = 16,
-  GOB_H = 24;
 const goblinSprites = {
   idle: { src: asset("assets/goblin/goblin-idle.png"), cols: 4, fps: 6 },
   run: { src: asset("assets/goblin/goblin-run.png"), cols: 4, fps: 10 },
@@ -69,15 +172,19 @@ const MAX_GOBLINS = 3;
 const SPAWN_INTERVAL_MS = 4000;
 const REQUIRE_SWORD_TO_SPAWN = false;
 
-// Параметры сердец (хил-объектов)
-const HEART_SIZE = TILE - 20; // визуальный размер
-const HEART_HEAL = 1; // сколько HP восполняет
-const HEART_SPAWN_INTERVAL_MS = 5000; // интервал спавна
-const HEART_DESPAWN_MS = 12000; // через сколько исчезает
-const MAX_HEARTS = 2; // максимум одновременно
+// Параметры сердец
+const HEART_SIZE = TILE - 20;
+const HEART_HEAL = 1;
+const HEART_SPAWN_INTERVAL_MS = 5000;
+const HEART_DESPAWN_MS = 12000;
+const MAX_HEARTS = 2;
 
-// ячейка с мечом
-const SWORD_TILE = { x: 3, y: 2 };
+// Пикапы оружия (в тайлах)
+const WEAPON_TILES = [
+  { type: "sword", x: 3, y: 2, color: "#ffffff" },
+  { type: "bow", x: 4, y: 2, color: "#00c853" },
+  { type: "staff", x: 5, y: 2, color: "#ffeb3b" },
+];
 
 // utils
 function loadImage(src) {
@@ -95,24 +202,50 @@ function aabb(a, b) {
     b.y + b.h <= a.y
   );
 }
-function drawFlippable(ctx, img, sx, sy, sw, sh, dx, dy, flipX = false) {
+
+// sw/sh — размер кадра в спрайте, dw/dh — во сколько рисуем
+function drawFlippable(
+  ctx,
+  img,
+  sx,
+  sy,
+  sw,
+  sh,
+  dx,
+  dy,
+  dw,
+  dh,
+  flipX = false
+) {
+  dx = Math.round(dx);
+  dy = Math.round(dy);
+  dw = Math.round(dw);
+  dh = Math.round(dh);
+
   if (!flipX) {
-    ctx.drawImage(img, sx, sy, sw, sh, Math.round(dx), Math.round(dy), sw, sh);
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     return;
   }
   ctx.save();
-  ctx.translate(Math.round(dx) + sw, Math.round(dy));
+  ctx.translate(dx + dw, dy);
   ctx.scale(-1, 1);
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
   ctx.restore();
 }
 
 /** =========================
- * Мобильный джойстик (D-pad + кнопка атаки)
+ * Мобильный джойстик (D-pad + атака + способность)
  * ========================= */
-function MobileJoystick({ onDirKeysChange, onAttackDown, onAttackUp }) {
+function MobileJoystick({
+  onDirKeysChange,
+  onAttackDown,
+  onAttackUp,
+  onAbilityDown,
+  onAbilityUp,
+  attackIconSrc,
+}) {
   const baseRef = useRef(null);
-  const [knob, setKnob] = useState({ x: 0, y: 0 }); // смещение «шляпки» в px
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
 
   const updateFromTouch = (touch) => {
     const el = baseRef.current;
@@ -122,29 +255,23 @@ function MobileJoystick({ onDirKeysChange, onAttackDown, onAttackUp }) {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
 
-    // вектор пальца относительно центра
     let dx = touch.clientX - cx;
     let dy = touch.clientY - cy;
 
-    // ограничения круга (радиус базы минус радиус «шляпки»)
-    const dotRadius = 22; // из CSS (44px / 2)
+    const dotRadius = 22;
     const maxR = rect.width / 2 - dotRadius;
     const r = Math.hypot(dx, dy);
 
-    // мёртвая зона и осевой порог
-    const dead = 14; // круговая мёртвая зона
-    const axisDead = 6; // порог по осям для устранения дрожи
+    const dead = 14;
+    const axisDead = 6;
 
-    // ограничиваем позицию «шляпки» кругом
     if (r > maxR) {
       dx = (dx / r) * maxR;
       dy = (dy / r) * maxR;
     }
 
-    // визуально двигаем «шляпку»
     setKnob({ x: dx, y: dy });
 
-    // логика направлений (можно по диагонали)
     const keys = new Set();
     if (r > dead) {
       if (dx > axisDead) keys.add("arrowright");
@@ -157,7 +284,7 @@ function MobileJoystick({ onDirKeysChange, onAttackDown, onAttackUp }) {
 
   const clearDir = () => {
     onDirKeysChange(new Set());
-    setKnob({ x: 0, y: 0 }); // вернуть «шляпку» в центр
+    setKnob({ x: 0, y: 0 });
   };
 
   return (
@@ -192,29 +319,52 @@ function MobileJoystick({ onDirKeysChange, onAttackDown, onAttackUp }) {
           }}
         />
       </div>
+      <div className={styles.btnsMobile}>
+        {/* Кнопка способности (Q) */}
+        <button
+          className={styles.attackBtn}
+          style={{ width: 90, height: 90, marginRight: 8 }}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            onAbilityDown();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            onAbilityUp();
+          }}
+          onTouchCancel={(e) => {
+            e.preventDefault();
+            onAbilityUp();
+          }}
+        >
+          <span style={{ pointerEvents: "none" }}>
+            <img
+              src="assets/utils-png/star.png"
+              className={styles.swordBtn}
+              alt="attack"
+            />
+          </span>
+        </button>
 
-      {/* Attack (SPACE) */}
-      <button
-        className={styles.attackBtn}
-        onTouchStart={(e) => {
-          e.preventDefault();
-          onAttackDown();
-        }}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          onAttackUp();
-        }}
-        onTouchCancel={(e) => {
-          e.preventDefault();
-          onAttackUp();
-        }}
-      >
-        <img
-          src={asset("/assets/sword-pixel-attack.png")}
-          className={styles.swordBtn}
-          alt="attack"
-        />
-      </button>
+        {/* Attack (SPACE) */}
+        <button
+          className={styles.attackBtn}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            onAttackDown();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            onAttackUp();
+          }}
+          onTouchCancel={(e) => {
+            e.preventDefault();
+            onAttackUp();
+          }}
+        >
+          <img src={attackIconSrc} className={styles.swordBtn} alt="attack" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -224,11 +374,16 @@ export default function CanvasGame() {
   const keys = useKeyboard();
   const [restartKey, setRestartKey] = useState(0);
 
+  const [playerClass, setPlayerClass] = useState(null);
+
   // overlay
   const [gameOver, setGameOver] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [kills, setKills] = useState(0);
   const startRef = useRef(performance.now());
+
+  // HUD по оружию (для DOM-текста)
+  const [weaponHud, setWeaponHud] = useState("нет");
 
   // мобильный порог
   const [isMobile, setIsMobile] = useState(
@@ -250,24 +405,48 @@ export default function CanvasGame() {
   };
   const pressAttack = () => virtualKeysRef.current.add(" ");
   const releaseAttack = () => virtualKeysRef.current.delete(" ");
+  const pressAbility = () => virtualKeysRef.current.add("q");
+  const releaseAbility = () => virtualKeysRef.current.delete("q");
 
-  const DIE_DURATION_MS = (sprites.die.cols / sprites.die.fps) * 1000;
-  const ATTACK_TOTAL_MS =
-    (sprites.attackSword.cols / sprites.attackSword.fps) * 1000;
+  // текущая иконка для кнопки атаки (по оружию)
+  const attackIconSrc = useMemo(() => {
+    if (weaponHud === "sword") return ICONS.sword;
+    if (weaponHud === "bow") return ICONS.bow;
+    if (weaponHud === "staff") return ICONS.staff;
+    // по умолчанию меч
+    return ICONS.sword;
+  }, [weaponHud]);
 
+  // загружаем только текущий класс + гоблинов + иконки лута
   const images = useMemo(() => {
+    if (!playerClass) return {};
     const o = {};
-    for (const k in sprites) o[k] = loadImage(sprites[k].src);
+    const cfg = CLASS_CONFIG[playerClass];
+    o.player = loadImage(cfg.spriteSheet);
     for (const k in goblinSprites)
       o["g_" + k] = loadImage(goblinSprites[k].src);
+
+    // иконки лута для канвы
+    o.loot_sword = loadImage(ICONS.sword);
+    o.loot_bow = loadImage(ICONS.bow);
+    o.loot_staff = loadImage(ICONS.staff);
+    o.loot_heart = loadImage(ICONS.heart);
+
     return o;
-  }, [restartKey]);
+  }, [restartKey, playerClass]);
 
   useEffect(() => {
+    if (!playerClass) return; // пока класс не выбран — не запускаем игру
+
     startRef.current = performance.now();
     setGameOver(false);
     setElapsedMs(0);
-    setKills(0); // сброс убийств
+    setKills(0);
+    setWeaponHud("нет");
+
+    const cfg = CLASS_CONFIG[playerClass];
+    const MAX_HP = cfg.maxHp;
+    const PLAYER_SPEED = cfg.speed;
 
     const c = canvasRef.current;
     const ctx = c.getContext("2d");
@@ -275,7 +454,7 @@ export default function CanvasGame() {
     c.width = VIEW_W;
     c.height = VIEW_H;
 
-    // препятствия
+    // препятствия и свободные тайлы
     const solids = [];
     const floorTiles = [];
     for (let y = 0; y < MAP.length; y++) {
@@ -286,30 +465,39 @@ export default function CanvasGame() {
       }
     }
 
-    // предмет «меч»
-    const swordPickup = {
-      x: SWORD_TILE.x * TILE + 8,
-      y: SWORD_TILE.y * TILE + 8,
-      w: TILE - 16,
-      h: TILE - 16,
+    // пикапы оружия
+    const weaponPickups = WEAPON_TILES.map((w) => ({
+      type: w.type,
+      color: w.color,
+      x: w.x * TILE + TILE / 4,
+      y: w.y * TILE + TILE / 4,
+      w: TILE / 2,
+      h: TILE / 2,
       picked: false,
-    };
+    }));
 
+    // игрок
     const player = {
       x: TILE * 2,
       y: TILE * 2,
       w: FRAME_W,
       h: FRAME_H,
       dir: 1,
-      state: "sleep",
+      state: "sleep", // sleep | idle | run | attack | die | blink | ability
       frame: 0,
       acc: 0,
-      hasSword: false,
+      weapon: null, // sword | bow | staff
       attackStartedAt: 0,
       hp: MAX_HP,
       hurtAt: -9999,
       dead: false,
       dieStartedAt: 0,
+      abilityType: cfg.ability,
+      abilityLastUsedAt: -9999,
+      abilityCooldownMs: cfg.abilityCooldownMs,
+      blinkStartedAt: 0,
+      blinkTargetX: null,
+      abilityAnimStartedAt: 0, // для анимации скиллов (slam)
     };
 
     // === Гоблины ===
@@ -320,13 +508,22 @@ export default function CanvasGame() {
         w: GOB_W,
         h: GOB_H,
         dir: -1,
-        state: "idle",
+        state: "idle", // idle | run | attack | die
         frame: 0,
         acc: 0,
         attackStartedAt: 0,
         hp: 3,
         hurtAt: -9999,
         dead: false,
+        stunnedUntil: 0,
+        knockbackVx: 0,
+        knockbackVy: 0,
+        knockbackEndAt: 0,
+
+        // DoT от стрелы
+        dotType: null,
+        dotNextTickAt: 0,
+        dotTicksLeft: 0,
       };
     }
     const goblins = [];
@@ -334,8 +531,17 @@ export default function CanvasGame() {
     let nextSpawnAt = performance.now() + SPAWN_INTERVAL_MS;
 
     // === Сердца (хил) ===
-    const hearts = []; // {x,y,w,h,createdAt}
+    const hearts = [];
     let nextHeartAt = performance.now() + HEART_SPAWN_INTERVAL_MS;
+
+    // ловушки разбойника
+    const traps = []; // {x,y,w,h,createdAt,durationMs}
+
+    // проджектайлы
+    const projectiles = []; // {type,x,y,vx,vy,radius}
+
+    // визуальные взрывы фаербола
+    const explosions = []; // {x, y, r, createdAt}
 
     function spawnHeart(now) {
       if (hearts.length >= MAX_HEARTS) return;
@@ -345,14 +551,31 @@ export default function CanvasGame() {
       const y = tile.ty * TILE + Math.round((TILE - size) / 2);
       const heartRect = { x, y, w: size, h: size };
       for (const s of solids) if (aabb(heartRect, s)) return;
-      if (!swordPickup.picked && aabb(heartRect, swordPickup)) return;
+      for (const w of weaponPickups)
+        if (!w.picked && aabb(heartRect, w)) return;
       hearts.push({ x, y, w: size, h: size, createdAt: now });
       nextHeartAt =
         now + HEART_SPAWN_INTERVAL_MS + Math.floor(Math.random() * 2000);
     }
 
     const cam = { x: 0, y: 0 };
+
+    // Инициализируем камеру около игрока И сразу зажимаем в пределах карты
+    {
+      const worldW = MAP[0].length * TILE;
+      const worldH = MAP.length * TILE;
+      const maxCamX = worldW - VIEW_W;
+      const maxCamY = worldH - VIEW_H;
+
+      let initX = Math.floor(player.x + player.w / 2 - VIEW_W / 2);
+      let initY = Math.floor(player.y + player.h / 2 - VIEW_H / 2);
+
+      cam.x = Math.max(0, Math.min(initX, maxCamX));
+      cam.y = Math.max(0, Math.min(initY, maxCamY));
+    }
+
     let last = performance.now();
+    let lastNow = performance.now();
     let running = true;
     let rafId = 0;
 
@@ -364,54 +587,85 @@ export default function CanvasGame() {
     };
     window.addEventListener("keydown", onKey, { passive: false });
 
-    // скользящее перемещение по препятствиям (диагональ → X → Y)
-    function tryMove(ent, dx, dy) {
-      const hits = (rect) => {
-        for (const s of solids) {
-          if (
-            !(
-              rect.x + rect.w <= s.x ||
-              s.x + s.w <= rect.x ||
-              rect.y + rect.h <= s.y ||
-              s.y + s.h <= rect.y
-            )
-          ) {
-            return true;
-          }
+    // helper для коллизий
+    const hitsSolids = (rect) => {
+      for (const s of solids) {
+        if (
+          !(
+            rect.x + rect.w <= s.x ||
+            s.x + s.w <= rect.x ||
+            rect.y + rect.h <= s.y ||
+            s.y + s.h <= rect.y
+          )
+        ) {
+          return true;
         }
-        return false;
-      };
+      }
+      return false;
+    };
 
+    // скользящее перемещение
+    function tryMove(ent, dx, dy) {
       const full = { x: ent.x + dx, y: ent.y + dy, w: ent.w, h: ent.h };
-      if (!hits(full)) {
+      if (!hitsSolids(full)) {
         ent.x = full.x;
         ent.y = full.y;
         return;
       }
 
       const onlyX = { x: ent.x + dx, y: ent.y, w: ent.w, h: ent.h };
-      if (!hits(onlyX)) {
+      if (!hitsSolids(onlyX)) {
         ent.x = onlyX.x;
       }
 
       const onlyY = { x: ent.x, y: ent.y + dy, w: ent.w, h: ent.h };
-      if (!hits(onlyY)) {
+      if (!hitsSolids(onlyY)) {
         ent.y = onlyY.y;
       }
     }
 
-    function spriteKey(p) {
-      if (p.state === "sleep") return "sleep";
-      if (p.state === "die") return "die";
-      if (p.hasSword) {
-        if (p.state === "attack") return "attackSword";
-        if (p.state === "run") return "runSword";
-        return "idleSword";
-      } else {
-        if (p.state === "run") return "run";
-        return "idle";
-      }
+    function getPlayerAnimMeta(player) {
+      if (player.state === "sleep") return PLAYER_FRAMES.sleep;
+      if (player.state === "die") return PLAYER_FRAMES.die;
+      if (player.state === "blink") return PLAYER_FRAMES.blink;
+      if (player.state === "attack") return PLAYER_FRAMES.attack;
+      if (player.state === "ability") return PLAYER_FRAMES.attack; // анимация скилла как атакующая
+      if (player.state === "run") return PLAYER_FRAMES.run;
+      return PLAYER_FRAMES.idle;
     }
+
+    function getPlayerRow(player) {
+      if (player.state === "sleep") return PLAYER_ROWS_BASE.sleep;
+      if (player.state === "die") return PLAYER_ROWS_BASE.die;
+      if (player.state === "blink") return BLINK_ROW;
+
+      const wRows = player.weapon ? PLAYER_WEAPON_ROWS[player.weapon] : null;
+
+      // Анимация скилла (например, slam воина)
+      if (player.state === "ability") {
+        // ВСЕГДА играем строку 115, если это slam, неважно какое оружие / есть ли оно
+        if (player.abilityType === "slam") {
+          return PLAYER_ABILITY_ROWS.slam; // строка 115
+        }
+        // fallback если появятся другие абилки с оружейными строками
+        if (wRows) return wRows.attack;
+        return PLAYER_ROWS_BASE.run;
+      }
+
+      if (player.state === "attack") {
+        if (wRows) return wRows.attack;
+        return PLAYER_ROWS_BASE.run;
+      }
+
+      if (player.state === "run") {
+        if (wRows) return wRows.run;
+        return PLAYER_ROWS_BASE.run;
+      }
+
+      if (wRows) return wRows.idle;
+      return PLAYER_ROWS_BASE.idle;
+    }
+
     function goblinSpriteKey(g) {
       if (g.dead) return null;
       if (g.state === "die") return "g_die";
@@ -420,16 +674,17 @@ export default function CanvasGame() {
       return "g_idle";
     }
 
-    function attackHitbox(p) {
-      const w = 14,
-        h = 12;
-      const x = p.dir === 1 ? p.x + p.w - 4 : p.x - w + 4;
-      const y = p.y + p.h / 2 - h / 2;
+    function attackHitbox(player) {
+      const w = 14;
+      const h = 12;
+      const x = player.dir === 1 ? player.x + player.w - 4 : player.x - w + 4;
+      const y = player.y + player.h / 2 - h / 2;
       return { x, y, w, h };
     }
+
     function goblinHitbox(g) {
-      const w = 12,
-        h = 12;
+      const w = 12;
+      const h = 12;
       const x = g.dir === 1 ? g.x + g.w - 6 : g.x - w + 6;
       const y = g.y + g.h / 2 - h / 2;
       return { x, y, w, h };
@@ -437,23 +692,51 @@ export default function CanvasGame() {
 
     function spawnGoblin(now) {
       if (goblins.length >= MAX_GOBLINS) return;
-      if (REQUIRE_SWORD_TO_SPAWN && !player.hasSword) return;
+      if (REQUIRE_SWORD_TO_SPAWN && !player.weapon) return;
       const pt = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
       goblins.push(makeGoblin(pt.x, pt.y));
       nextSpawnAt = now + SPAWN_INTERVAL_MS;
+    }
+
+    function spawnProjectile(type) {
+      const speed = type === "arrow" ? 260 : 200;
+      const radius = type === "arrow" ? 6 : 10;
+      const dirX = player.dir || 1;
+
+      projectiles.push({
+        type,
+        x: player.x + player.w / 2,
+        y: player.y + player.h / 2,
+        vx: dirX * speed,
+        vy: 0,
+        radius,
+      });
+    }
+
+    function damageGoblin(g, dmg, now) {
+      if (g.dead || g.state === "die") return;
+      g.hp -= dmg;
+      g.hurtAt = now;
+      if (g.hp <= 0) {
+        g.state = "die";
+        g.frame = 0;
+        g.acc = 0;
+        g.dead = false;
+        setKills((k) => k + 1);
+      }
     }
 
     function loop(now) {
       if (!running) return;
       const dt = Math.min(0.033, (now - last) / 1000);
       last = now;
+      lastNow = now;
       update(dt, now);
       render();
       rafId = requestAnimationFrame(loop);
     }
 
     function update(dt, now) {
-      // склеиваем реальные и виртуальные нажатия
       const mergedKeys = new Set([...keys.current, ...virtualKeysRef.current]);
 
       // сон до первого ввода
@@ -463,7 +746,7 @@ export default function CanvasGame() {
           player.frame = 0;
           player.acc = 0;
         } else {
-          const meta = sprites.sleep;
+          const meta = PLAYER_FRAMES.sleep;
           player.acc += dt;
           if (player.acc >= 1 / meta.fps) {
             player.acc = 0;
@@ -480,7 +763,11 @@ export default function CanvasGame() {
       // ввод (если персонаж жив)
       let mx = 0,
         my = 0;
-      if (player.state !== "die") {
+      if (
+        player.state !== "die" &&
+        player.state !== "blink" &&
+        player.state !== "ability"
+      ) {
         if (mergedKeys.has("arrowleft") || mergedKeys.has("a")) {
           mx -= 1;
           player.dir = -1;
@@ -493,39 +780,62 @@ export default function CanvasGame() {
         if (mergedKeys.has("arrowdown") || mergedKeys.has("s")) my += 1;
       }
 
-      // атака игрока (старт)
-      if (
-        player.hasSword &&
+      // атака
+      const attackPressed =
         (mergedKeys.has(" ") || mergedKeys.has("enter")) &&
         player.state !== "attack" &&
-        player.state !== "die"
-      ) {
+        player.state !== "die" &&
+        player.state !== "blink" &&
+        player.state !== "ability" &&
+        !!player.weapon;
+
+      if (attackPressed) {
         player.state = "attack";
         player.frame = 0;
         player.acc = 0;
         player.attackStartedAt = now;
+
+        if (player.weapon === "bow") {
+          spawnProjectile("arrow");
+        } else if (player.weapon === "staff") {
+          spawnProjectile("staff");
+        }
       }
 
-      // движение игрока
+      // движение игрока (не двигаемся во время атаки, блинка и скилла)
       const len = Math.hypot(mx, my) || 1;
-      if (player.state !== "attack" && player.state !== "die" && (mx || my)) {
+      if (
+        player.state !== "attack" &&
+        player.state !== "die" &&
+        player.state !== "blink" &&
+        player.state !== "ability" &&
+        (mx || my)
+      ) {
         tryMove(
           player,
           (mx / len) * PLAYER_SPEED * dt,
           (my / len) * PLAYER_SPEED * dt
         );
         player.state = "run";
-      } else if (player.state !== "attack" && player.state !== "die") {
+      } else if (
+        player.state !== "attack" &&
+        player.state !== "die" &&
+        player.state !== "blink" &&
+        player.state !== "ability"
+      ) {
         player.state = "idle";
       }
 
-      // подбор меча
-      if (!player.hasSword && aabb(player, swordPickup)) {
-        swordPickup.picked = true;
-        player.hasSword = true;
-        player.state = "idle";
-        player.frame = 0;
-        player.acc = 0;
+      // подбор оружия
+      for (const w of weaponPickups) {
+        if (!w.picked && aabb(player, w)) {
+          w.picked = true;
+          player.weapon = w.type;
+          player.state = "idle";
+          player.frame = 0;
+          player.acc = 0;
+          setWeaponHud(w.type);
+        }
       }
 
       // ПОДБОР СЕРДЕЦ
@@ -542,28 +852,15 @@ export default function CanvasGame() {
       }
 
       // === АНИМАЦИИ И СОСТОЯНИЯ ИГРОКА ===
-      const pm =
-        sprites[
-          player.state === "die"
-            ? "die"
-            : player.hasSword
-            ? player.state === "attack"
-              ? "attackSword"
-              : player.state === "run"
-              ? "runSword"
-              : "idleSword"
-            : player.state === "run"
-            ? "run"
-            : "idle"
-        ];
+      const animMeta = getPlayerAnimMeta(player);
 
-      // тикаем кадры только для НЕ attack (attack управляется временем)
       player.acc += dt;
-      if (player.acc >= 1 / pm.fps) {
+      if (player.acc >= 1 / animMeta.fps) {
         player.acc = 0;
 
         if (player.state === "die") {
-          if (player.frame < pm.cols - 1) {
+          // проигрываем анимацию смерти и только после этого — game over
+          if (player.frame < animMeta.cols - 1) {
             player.frame += 1;
           } else if (!player.dead) {
             player.dead = true;
@@ -572,16 +869,20 @@ export default function CanvasGame() {
             setElapsedMs(ms);
             setGameOver(true);
           }
-        } else if (player.state !== "attack") {
-          player.frame = (player.frame + 1) % pm.cols;
+        } else if (
+          player.state !== "attack" &&
+          player.state !== "blink" &&
+          player.state !== "ability"
+        ) {
+          player.frame = (player.frame + 1) % animMeta.cols;
         }
       }
 
-      // Атака по времени: от 0-го до последнего кадра без зацикливания
+      // Атака по времени
       if (player.state === "attack") {
         const t = now - player.attackStartedAt;
-        const cols = sprites.attackSword.cols;
-        const fps = sprites.attackSword.fps;
+        const cols = PLAYER_FRAMES.attack.cols;
+        const fps = PLAYER_FRAMES.attack.fps;
         const frameByTime = Math.min(cols - 1, Math.floor((t / 1000) * fps));
         player.frame = frameByTime;
 
@@ -592,46 +893,177 @@ export default function CanvasGame() {
         }
       }
 
-      // страховка: смерть по таймеру
-      if (player.state === "die") {
-        if (player.dieStartedAt === 0) player.dieStartedAt = now;
-        if (!player.dead && now - player.dieStartedAt >= DIE_DURATION_MS - 10) {
-          player.dead = true;
-          running = false;
-          const ms = now - startRef.current;
-          setElapsedMs(ms);
-          setGameOver(true);
+      // Анимация скилла (например slam)
+      if (player.state === "ability") {
+        const t = now - player.abilityAnimStartedAt;
+        const cols = PLAYER_FRAMES.attack.cols;
+        const fps = PLAYER_FRAMES.attack.fps;
+        const frameByTime = Math.min(cols - 1, Math.floor((t / 1000) * fps));
+        player.frame = frameByTime;
+
+        if (t >= ATTACK_TOTAL_MS) {
+          player.state = "idle";
+          player.frame = 0;
+          player.acc = 0;
         }
       }
 
-      // неуязвимость игрока после урона
+      // Блинк по времени (анимация, телепорт в конце)
+      if (player.state === "blink") {
+        const t = now - player.blinkStartedAt;
+        const cols = PLAYER_FRAMES.blink.cols;
+        const fps = PLAYER_FRAMES.blink.fps;
+        const frameByTime = Math.min(cols - 1, Math.floor((t / 1000) * fps));
+        player.frame = frameByTime;
+
+        if (t >= BLINK_DURATION_MS) {
+          if (player.blinkTargetX !== null) {
+            player.x = player.blinkTargetX;
+          }
+          player.blinkTargetX = null;
+          player.state = "idle";
+          player.frame = 0;
+          player.acc = 0;
+        }
+      }
+
       const playerInvuln = now - player.hurtAt < INVULN_MS;
 
-      // === ИИ и анимации всех гоблинов ===
+      // === СПОСОБНОСТЬ КЛАССА (кнопка Q) ===
+      const abilityPressed =
+        (mergedKeys.has("q") || mergedKeys.has("й")) &&
+        now - player.abilityLastUsedAt >= player.abilityCooldownMs &&
+        !player.dead &&
+        player.state !== "die" &&
+        player.state !== "blink" &&
+        player.state !== "attack" &&
+        player.state !== "ability";
+
+      if (abilityPressed) {
+        if (player.abilityType === "blink") {
+          // БЛИНК МАГА: считаем целевую точку, но не двигаем сразу
+          const maxDist = TILE * 3;
+          const step = TILE / 4;
+          const dirX = player.dir || 1;
+          let targetX = player.x;
+          let traveled = 0;
+          while (traveled < maxDist) {
+            const nx = targetX + dirX * step;
+            const rect = { x: nx, y: player.y, w: player.w, h: player.h };
+            if (hitsSolids(rect)) break;
+            targetX = nx;
+            traveled += step;
+          }
+
+          player.blinkTargetX = targetX;
+          player.state = "blink";
+          player.frame = 0;
+          player.acc = 0;
+          player.blinkStartedAt = now;
+        } else if (player.abilityType === "trap") {
+          // ЛОВУШКА РАЗБОЙНИКА
+          traps.push({
+            x: player.x + player.w / 4,
+            y: player.y + (player.h * 2) / 3,
+            w: TILE / 2,
+            h: TILE / 8,
+            createdAt: now,
+            durationMs: 6000,
+          });
+        } else if (player.abilityType === "slam") {
+          // УДАР ВОИНА ПО ПЛОЩАДИ С ПЛАВНЫМ НОКБЭКОМ + АНИМАЦИЯ 115
+          const radius = TILE * 2.5;
+          const kbDist = TILE * 2.5;
+          const kbDurSec = KNOCKBACK_DURATION_MS / 1000;
+
+          for (const g of goblins) {
+            if (g.dead) continue;
+            const dx = g.x + g.w / 2 - (player.x + player.w / 2);
+            const dy = g.y + g.h / 2 - (player.y + player.h / 2);
+            const dist = Math.hypot(dx, dy);
+
+            if (dist <= radius) {
+              damageGoblin(g, 1, now);
+              const len = dist || 1;
+              const speed = kbDist / kbDurSec;
+
+              g.knockbackVx = (dx / len) * speed;
+              g.knockbackVy = (dy / len) * speed;
+              g.knockbackEndAt = now + KNOCKBACK_DURATION_MS;
+
+              g.stunnedUntil = Math.max(
+                g.stunnedUntil,
+                now + KNOCKBACK_DURATION_MS
+              );
+            }
+          }
+
+          // включаем отдельное состояние ability -> анимация со строки 115
+          player.state = "ability";
+          player.frame = 0;
+          player.acc = 0;
+          player.abilityAnimStartedAt = now;
+        }
+        player.abilityLastUsedAt = now;
+      }
+
+      // === ИИ и анимации гоблинов ===
       for (const g of goblins) {
         if (g.dead) continue;
 
-        const dx = player.x - g.x;
-        const dy = player.y - g.y;
-        const dist = Math.hypot(dx, dy);
-        g.dir = dx >= 0 ? 1 : -1;
+        // DoT от стрелы
+        if (
+          g.dotType === "arrow" &&
+          g.dotTicksLeft > 0 &&
+          now >= g.dotNextTickAt &&
+          !g.dead &&
+          g.state !== "die"
+        ) {
+          damageGoblin(g, ARROW_DOT_DAMAGE, now);
+          g.dotTicksLeft -= 1;
+          g.dotNextTickAt += ARROW_DOT_INTERVAL_MS;
 
-        if (g.state !== "die" && dist > 22) {
-          if (g.state !== "attack") {
-            g.state = "run";
-            const glen = dist || 1;
-            tryMove(
-              g,
-              (dx / glen) * ENEMY_SPEED * dt,
-              (dy / glen) * ENEMY_SPEED * dt
-            );
+          // если гоблин умер от DoT — сбросим метку
+          if (g.dotTicksLeft <= 0 || g.hp <= 0) {
+            g.dotType = null;
           }
-        } else if (g.state !== "die") {
-          if (g.state !== "attack") {
-            g.state = "attack";
-            g.frame = 0;
-            g.acc = 0;
-            g.attackStartedAt = now;
+        }
+
+        // ПЛАВНЫЙ НОКБЭК
+        if (g.knockbackEndAt && now < g.knockbackEndAt) {
+          tryMove(g, g.knockbackVx * dt, g.knockbackVy * dt);
+        } else {
+          // сбрасываем нокбэк
+          g.knockbackEndAt = 0;
+          g.knockbackVx = 0;
+          g.knockbackVy = 0;
+
+          if (g.stunnedUntil && now < g.stunnedUntil) {
+            // только анимация (ниже)
+          } else {
+            const dx = player.x - g.x;
+            const dy = player.y - g.y;
+            const dist = Math.hypot(dx, dy);
+            g.dir = dx >= 0 ? 1 : -1;
+
+            if (g.state !== "die" && dist > 22) {
+              if (g.state !== "attack") {
+                g.state = "run";
+                const glen = dist || 1;
+                tryMove(
+                  g,
+                  (dx / glen) * ENEMY_SPEED * dt,
+                  (dy / glen) * ENEMY_SPEED * dt
+                );
+              }
+            } else if (g.state !== "die") {
+              if (g.state !== "attack") {
+                g.state = "attack";
+                g.frame = 0;
+                g.acc = 0;
+                g.attackStartedAt = now;
+              }
+            }
           }
         }
 
@@ -645,6 +1077,7 @@ export default function CanvasGame() {
               ? "run"
               : "idle"
           ];
+
         g.acc += dt;
         if (g.acc >= 1 / gm.fps) {
           g.acc = 0;
@@ -657,8 +1090,31 @@ export default function CanvasGame() {
         }
       }
 
-      // урон гоблинам от атаки игрока
-      if (player.state === "attack") {
+      // ловушки: обновление и оглушение
+      for (let ti = traps.length - 1; ti >= 0; ti--) {
+        const t = traps[ti];
+        if (now - t.createdAt > t.durationMs) {
+          traps.splice(ti, 1);
+          continue;
+        }
+        for (const g of goblins) {
+          if (g.dead) continue;
+          const gobRect = {
+            x: g.x + 4,
+            y: g.y + 6,
+            w: g.w - 8,
+            h: g.h - 10,
+          };
+          if (aabb(gobRect, t)) {
+            g.stunnedUntil = now + 1000;
+            traps.splice(ti, 1);
+            break;
+          }
+        }
+      }
+
+      // урон гоблинам от меча
+      if (player.state === "attack" && player.weapon === "sword") {
         const hb = attackHitbox(player);
         for (const g of goblins) {
           if (g.dead || g.state === "die") continue;
@@ -669,19 +1125,98 @@ export default function CanvasGame() {
             h: g.h - 10,
           };
           if (aabb(hb, gobRect) && now - g.hurtAt > 200) {
-            g.hp -= 1;
-            g.hurtAt = now;
-            if (g.hp <= 0) {
-              g.state = "die";
-              g.frame = 0;
-              g.acc = 0;
-              setKills((k) => k + 1); // считаем убийство
-            }
+            damageGoblin(g, 1, now);
           }
         }
       }
 
-      // урон игроку от атакующих гоблинов
+      // проджектайлы
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+
+        const rect = {
+          x: p.x - p.radius,
+          y: p.y - p.radius,
+          w: p.radius * 2,
+          h: p.radius * 2,
+        };
+
+        let hitWall = false;
+        for (const s of solids) {
+          if (aabb(rect, s)) {
+            hitWall = true;
+            break;
+          }
+        }
+
+        let hitEnemy = false;
+        if (!hitWall) {
+          for (const g of goblins) {
+            if (g.dead || g.state === "die") continue;
+            const gobRect = {
+              x: g.x + 4,
+              y: g.y + 6,
+              w: g.w - 8,
+              h: g.h - 10,
+            };
+            if (aabb(rect, gobRect)) {
+              hitEnemy = true;
+
+              if (p.type === "arrow") {
+                // мгновенный урон
+                damageGoblin(g, ARROW_HIT_DAMAGE, now);
+                // вешаем DoT
+                g.dotType = "arrow";
+                g.dotTicksLeft = ARROW_DOT_TICKS;
+                g.dotNextTickAt = now + ARROW_DOT_INTERVAL_MS;
+              }
+              // staff AoE перенесён ниже — при любом столкновении (стена или моб)
+              break;
+            }
+          }
+        }
+
+        if (hitWall || hitEnemy) {
+          // Фаербол: AoE взрыв по области ВСЕГДА, даже если ударился о стену
+          if (p.type === "staff") {
+            const aoeR = TILE;
+
+            // урон по области
+            for (const g2 of goblins) {
+              if (g2.dead || g2.state === "die") continue;
+              const gx = g2.x + g2.w / 2;
+              const gy = g2.y + g2.h / 2;
+              const dist = Math.hypot(gx - p.x, gy - p.y);
+              if (dist <= aoeR) {
+                damageGoblin(g2, 1, now);
+              }
+            }
+
+            // визуальный взрыв
+            explosions.push({
+              x: p.x,
+              y: p.y,
+              r: aoeR,
+              createdAt: now,
+            });
+          }
+
+          projectiles.splice(i, 1);
+        } else {
+          if (
+            p.x < -TILE ||
+            p.y < -TILE ||
+            p.x > MAP[0].length * TILE + TILE ||
+            p.y > MAP.length * TILE + TILE
+          ) {
+            projectiles.splice(i, 1);
+          }
+        }
+      }
+
+      // урон игроку от гоблинов
       for (const g of goblins) {
         if (g.dead || g.state !== "attack" || player.dead) continue;
         const gb = goblinHitbox(g);
@@ -705,22 +1240,42 @@ export default function CanvasGame() {
         if (goblins[i].dead) goblins.splice(i, 1);
       }
 
-      // камера
-      cam.x = Math.floor(player.x + player.w / 2 - VIEW_W / 2);
-      cam.y = Math.floor(player.y + player.h / 2 - VIEW_H / 2);
-      cam.x = Math.max(0, Math.min(cam.x, MAP[0].length * TILE - VIEW_W));
-      cam.y = Math.max(0, Math.min(cam.y, MAP.length * TILE - VIEW_H));
+      // ПЛАВНАЯ КАМЕРА (сразу с учётом границ карты)
+      const worldW = MAP[0].length * TILE;
+      const worldH = MAP.length * TILE;
+      const maxCamX = worldW - VIEW_W;
+      const maxCamY = worldH - VIEW_H;
+
+      const rawTargetX = Math.floor(player.x + player.w / 2 - VIEW_W / 2);
+      const rawTargetY = Math.floor(player.y + player.h / 2 - VIEW_H / 2);
+
+      const targetX = Math.max(0, Math.min(rawTargetX, maxCamX));
+      const targetY = Math.max(0, Math.min(rawTargetY, maxCamY));
+
+      const lerpFactor = Math.min(1, CAM_LERP * dt);
+
+      cam.x += (targetX - cam.x) * lerpFactor;
+      cam.y += (targetY - cam.y) * lerpFactor;
+
+      // на всякий случай финальный кламп
+      cam.x = Math.max(0, Math.min(cam.x, maxCamX));
+      cam.y = Math.max(0, Math.min(cam.y, maxCamY));
     }
 
     function render() {
-      // фон
       const ctx = c.getContext("2d");
+
+      // Округлённая камера для рисования (убираем линии между тайлами)
+      const camX = Math.round(cam.x);
+      const camY = Math.round(cam.y);
+
+      // фон
       ctx.fillStyle = "#223b27";
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       for (let y = 0; y < MAP.length; y++)
         for (let x = 0; x < MAP[0].length; x++) {
-          const dx = x * TILE - cam.x,
-            dy = y * TILE - cam.y;
+          const dx = x * TILE - camX;
+          const dy = y * TILE - camY;
           ctx.fillStyle = MAP[y][x] === 1 ? "#2a2f38" : "#2e6b3c";
           ctx.fillRect(dx, dy, TILE, TILE);
         }
@@ -728,27 +1283,112 @@ export default function CanvasGame() {
       ctx.lineWidth = 1;
       ctx.strokeRect(-0.5, -0.5, VIEW_W + 1, VIEW_H + 1);
 
-      // меч
-      if (!swordPickup.picked) {
-        const dx = swordPickup.x - cam.x,
-          dy = swordPickup.y - cam.y;
-        ctx.fillStyle = "#e7e7e7";
-        ctx.fillRect(dx, dy, swordPickup.w, swordPickup.h);
-        ctx.fillStyle = "#444";
-        ctx.fillRect(dx + 2, dy + 2, swordPickup.w - 4, swordPickup.h - 4);
+      // пикапы оружия (PNG иконки)
+      for (const w of weaponPickups) {
+        if (w.picked) continue;
+        const dx = w.x - camX;
+        const dy = w.y - camY;
+
+        const iconKey = `loot_${w.type}`;
+        const icon = images[iconKey];
+
+        if (icon && icon.complete) {
+          ctx.drawImage(icon, dx, dy, w.w, w.h);
+        } else {
+          // fallback: квадратик, пока не загрузилась картинка
+          ctx.fillStyle = w.color;
+          ctx.fillRect(dx, dy, w.w, w.h);
+        }
       }
 
-      // СЕРДЦА
+      // СЕРДЦА (PNG иконка)
       for (const h of hearts) {
-        const dx = h.x - cam.x;
-        const dy = h.y - cam.y;
-        ctx.fillStyle = "rgba(0,0,0,0.25)";
-        ctx.fillRect(dx + 2, dy + 3, h.w, h.h);
-        ctx.fillStyle = "#e53935";
-        ctx.fillRect(dx, dy, h.w, h.h);
-        ctx.strokeStyle = "#7f1d1d";
+        const dx = h.x - camX;
+        const dy = h.y - camY;
+        const heartImg = images.loot_heart;
+
+        if (heartImg && heartImg.complete) {
+          ctx.drawImage(heartImg, dx, dy, h.w, h.h);
+        } else {
+          // fallback: старый квадратик, если иконка не загрузилась
+          ctx.fillStyle = "rgba(0,0,0,0.25)";
+          ctx.fillRect(dx + 2, dy + 3, h.w, h.h);
+          ctx.fillStyle = "#e53935";
+          ctx.fillRect(dx, dy, h.w, h.h);
+          ctx.strokeStyle = "#7f1d1d";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(dx + 0.5, dy + 0.5, h.w - 1, h.h - 1);
+        }
+      }
+
+      // ловушки
+      for (const t of traps) {
+        const dx = t.x - camX;
+        const dy = t.y - camY;
+        ctx.fillStyle = "#333";
+        ctx.fillRect(dx, dy, t.w, t.h);
+        ctx.strokeStyle = "#ff9800";
+        ctx.strokeRect(dx, dy, t.w, t.h);
+      }
+
+      // проджектайлы
+      for (const p of projectiles) {
+        const dx = p.x - camX;
+        const dy = p.y - camY;
+
+        if (p.type === "arrow") {
+          // зелёная полоска-стрела
+          const w = p.radius * 3; // длина стрелы
+          const h = 3; // толщина стрелы
+
+          // центрируем относительно позиции снаряда
+          const x = dx - w / 2;
+          const y = dy - h / 2;
+
+          ctx.fillStyle = "#00e676";
+          ctx.fillRect(x, y, w, h);
+          ctx.strokeStyle = "#000";
+          ctx.strokeRect(x, y, w, h);
+        } else {
+          // фаербол — остаётся кругом
+          ctx.beginPath();
+          ctx.arc(dx, dy, p.radius, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.fillStyle = "#ffeb3b";
+          ctx.fill();
+          ctx.strokeStyle = "#000";
+          ctx.stroke();
+        }
+      }
+
+      // взрывы фаербола
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        const ex = explosions[i];
+        const age = lastNow - ex.createdAt;
+        if (age > STAFF_EXPLOSION_MS) {
+          explosions.splice(i, 1);
+          continue;
+        }
+
+        const t = age / STAFF_EXPLOSION_MS;
+        const alpha = 1 - t;
+
+        const dx = ex.x - camX;
+        const dy = ex.y - camY;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        ctx.beginPath();
+        ctx.arc(dx, dy, ex.r, 0, Math.PI * 2);
+        ctx.fillStyle = "#ff9800";
+        ctx.fill();
+
         ctx.lineWidth = 2;
-        ctx.strokeRect(dx + 0.5, dy + 0.5, h.w - 1, h.h - 1);
+        ctx.strokeStyle = "#ffcc80";
+        ctx.stroke();
+
+        ctx.restore();
       }
 
       // гоблины
@@ -756,64 +1396,73 @@ export default function CanvasGame() {
         const gkey = goblinSpriteKey(g);
         const gimg = gkey ? images[gkey] : null;
         if (gimg && gimg.complete) {
-          const sx = g.frame * GOB_W;
+          const sx = g.frame * GOB_SRC_W;
           drawFlippable(
             ctx,
             gimg,
             sx,
             0,
+            GOB_SRC_W,
+            GOB_SRC_H,
+            g.x - camX,
+            g.y - camY,
             GOB_W,
             GOB_H,
-            g.x - cam.x,
-            g.y - cam.y,
             g.dir === -1
           );
         }
         if (!g.dead) {
           ctx.fillStyle = "#000";
-          ctx.fillRect(g.x - cam.x + 2, g.y - cam.y - 4, 14, 3);
+          ctx.fillRect(g.x - camX + 2, g.y - camY - 6, 28, 4);
           ctx.fillStyle = "#5cdd58";
           ctx.fillRect(
-            g.x - cam.x + 2,
-            g.y - cam.y - 4,
-            Math.max(0, g.hp / 3) * 14,
-            3
+            g.x - camX + 2,
+            g.y - camY - 6,
+            Math.max(0, (g.hp / 3) * 28),
+            4
           );
         }
       }
 
       // игрок
       {
-        const pkey = spriteKey(player);
-        const pimg = images[pkey];
-        if (!player.dead && pimg && pimg.complete) {
-          const sx = player.frame * FRAME_W;
+        const pimg = images.player;
+        if (!pimg || !pimg.complete) return;
+
+        const row = getPlayerRow(player);
+        const sx = player.frame * FRAME_SRC_W;
+        const sy = row * FRAME_SRC_H;
+
+        if (!player.dead) {
           drawFlippable(
             ctx,
             pimg,
             sx,
-            0,
+            sy,
+            FRAME_SRC_W,
+            FRAME_SRC_H,
+            player.x - camX,
+            player.y - camY,
             FRAME_W,
             FRAME_H,
-            player.x - cam.x,
-            player.y - cam.y,
             player.dir === -1
           );
         }
-        if (player.state === "attack") {
+
+        if (player.state === "attack" && player.weapon === "sword") {
           const hb = attackHitbox(player);
           ctx.globalAlpha = 0.25;
           ctx.fillStyle = "#ffd34a";
-          ctx.fillRect(hb.x - cam.x, hb.y - cam.y, hb.w, hb.h);
+          ctx.fillRect(hb.x - camX, hb.y - camY, hb.w, hb.h);
           ctx.globalAlpha = 1;
         }
       }
 
-      // UI HP
+      // UI HP (оставил на канве — это ок)
       ctx.fillStyle = "#000";
-      ctx.fillRect(8, 8, 60, 6);
+      ctx.fillRect(8, 8, 120, 10);
       ctx.fillStyle = "#f44";
-      ctx.fillRect(8, 8, Math.max(0, player.hp / MAX_HP) * 60, 6);
+      ctx.fillRect(8, 8, Math.max(0, (player.hp / MAX_HP) * 120), 10);
     }
 
     requestAnimationFrame(loop);
@@ -821,32 +1470,85 @@ export default function CanvasGame() {
       window.removeEventListener("keydown", onKey);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [images, keys, restartKey]);
+  }, [images, keys, restartKey, playerClass, setWeaponHud]);
 
   return (
-    <div className={styles.canvasWrap}>
+    <div className={styles.canvasWrap} style={{ position: "relative" }}>
       <canvas ref={canvasRef} className={styles.canvas} />
 
-      {/* Мобильный UI при ширине < 1280 */}
-      {isMobile && (
+      {playerClass && (
+        <div className={styles.classWrapper}>
+          <div>Класс: {CLASS_CONFIG[playerClass].name}</div>
+          <div>Оружие: {weaponHud || "нет"}</div>
+        </div>
+      )}
+
+      {/* Мобильный UI */}
+      {isMobile && playerClass && (
         <MobileJoystick
           onDirKeysChange={setDirKeys}
           onAttackDown={pressAttack}
           onAttackUp={releaseAttack}
+          onAbilityDown={pressAbility}
+          onAbilityUp={releaseAbility}
+          attackIconSrc={attackIconSrc}
         />
       )}
 
-      {gameOver && (
+      {/* Выбор класса до начала игры */}
+      {!playerClass && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h2>Выберите класс</h2>
+            <p>Перед началом игры выбери героя.</p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <div
+                className={styles.btn}
+                onClick={() => setPlayerClass("warrior")}
+              >
+                Воин
+              </div>
+              <div
+                className={styles.btn}
+                onClick={() => setPlayerClass("rogue")}
+              >
+                Разбойник
+              </div>
+              <div
+                className={styles.btn}
+                onClick={() => setPlayerClass("wizard")}
+              >
+                Маг
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Оверлей конца игры */}
+      {gameOver && playerClass && (
         <div className={styles.overlay}>
           <div className={styles.modal}>
             <h2>Игра окончена</h2>
             <p>Время: {(elapsedMs / 1000).toFixed(2)} сек.</p>
             <p>Убито гоблинов: {kills}</p>
-            <div
-              className={styles.btn}
-              onClick={() => setRestartKey((k) => k + 1)}
-            >
-              Играть снова (R)
+            <div className={styles.btns}>
+              <div
+                className={styles.btn}
+                onClick={() => setRestartKey((k) => k + 1)}
+              >
+                Играть снова (R)
+              </div>
+              <div
+                className={styles.btn}
+                onClick={() => {
+                  // сбрасываем игру и возвращаемся к выбору класса
+                  setGameOver(false);
+                  setPlayerClass(null);
+                }}
+              >
+                Выбрать класс
+              </div>
             </div>
           </div>
         </div>
