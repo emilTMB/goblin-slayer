@@ -131,7 +131,6 @@ const PLAYER_FRAMES = {
   blink: { cols: 6, fps: 14 },
 };
 
-const DIE_DURATION_MS = (PLAYER_FRAMES.die.cols / PLAYER_FRAMES.die.fps) * 1000;
 const ATTACK_TOTAL_MS =
   (PLAYER_FRAMES.attack.cols / PLAYER_FRAMES.attack.fps) * 1000;
 const BLINK_DURATION_MS =
@@ -145,32 +144,180 @@ const goblinSprites = {
   die: { src: asset("assets/goblin/goblin-die.png"), cols: 4, fps: 8 },
 };
 
-// карта: 0 — трава, 1 — стена
-const MAP = [
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-];
+// === МИРЫ / ЛОКАЦИИ ===
+// Можно добавлять новые карты: overworld, dungeon1, dungeon2 и т.д.
+const WORLDS = {
+  overworld: {
+    name: "Поверхность",
+    map: [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    defaultSpawn: { tx: 2, ty: 2 },
+    spawnPoints: [
+      { x: 8, y: 6 },
+      { x: 9, y: 2 },
+      { x: 2, y: 7 },
+      { x: 10, y: 7 },
+    ],
+    weaponTiles: [
+      { type: "sword", x: 3, y: 2, color: "#ffffff" },
+      { type: "bow", x: 4, y: 2, color: "#00c853" },
+      { type: "staff", x: 5, y: 2, color: "#ffeb3b" },
+    ],
+    exits: [
+      {
+        tx: 12,
+        ty: 1,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 1 },
+      },
+      {
+        tx: 12,
+        ty: 2,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 2 },
+      },
+      {
+        tx: 12,
+        ty: 3,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 3 },
+      },
+      {
+        tx: 12,
+        ty: 4,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 4 },
+      },
+      {
+        tx: 12,
+        ty: 5,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 5 },
+      },
+      {
+        tx: 12,
+        ty: 6,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 6 },
+      },
+      {
+        tx: 12,
+        ty: 7,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 7 },
+      },
+      {
+        tx: 12,
+        ty: 8,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 8 },
+      },
+      {
+        tx: 12,
+        ty: 9,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 9 },
+      },
+      {
+        tx: 12,
+        ty: 10,
+        targetWorld: "dungeon1",
+        targetSpawn: { tx: 1, ty: 10 },
+      },
+    ],
+  },
 
-// Точки спавна гоблинов (в тайлах)
-const SPAWN_POINTS = [
-  { x: 8, y: 6 },
-  { x: 9, y: 2 },
-  { x: 2, y: 7 },
-  { x: 10, y: 7 },
-];
-
-// Параметры респауна гоблинов
-const MAX_GOBLINS = 3;
-const SPAWN_INTERVAL_MS = 4000;
-const REQUIRE_SWORD_TO_SPAWN = false;
+  dungeon1: {
+    name: "Данж 1",
+    map: [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+      [0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1],
+      [0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1],
+      [0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1],
+      [0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+      [0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+      [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1],
+      [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    defaultSpawn: { tx: 2, ty: 8 },
+    spawnPoints: [{ x: 6, y: 5 }],
+    weaponTiles: [], // тут пока нет оружия
+    exits: [
+      {
+        tx: -1,
+        ty: 1,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 1 },
+      },
+      {
+        tx: -1,
+        ty: 2,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 2 },
+      },
+      {
+        tx: -1,
+        ty: 3,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 3 },
+      },
+      {
+        tx: -1,
+        ty: 4,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 4 },
+      },
+      {
+        tx: -1,
+        ty: 5,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 5 },
+      },
+      {
+        tx: -1,
+        ty: 6,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 6 },
+      },
+      {
+        tx: -1,
+        ty: 7,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 7 },
+      },
+      {
+        tx: -1,
+        ty: 8,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 8 },
+      },
+      {
+        tx: -1,
+        ty: 9,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 9 },
+      },
+      {
+        tx: -1,
+        ty: 10,
+        targetWorld: "overworld",
+        targetSpawn: { tx: 11, ty: 10 },
+      },
+    ],
+  },
+};
 
 // Параметры сердец
 const HEART_SIZE = TILE - 20;
@@ -178,13 +325,6 @@ const HEART_HEAL = 1;
 const HEART_SPAWN_INTERVAL_MS = 5000;
 const HEART_DESPAWN_MS = 12000;
 const MAX_HEARTS = 2;
-
-// Пикапы оружия (в тайлах)
-const WEAPON_TILES = [
-  { type: "sword", x: 3, y: 2, color: "#ffffff" },
-  { type: "bow", x: 4, y: 2, color: "#00c853" },
-  { type: "staff", x: 5, y: 2, color: "#ffeb3b" },
-];
 
 // utils
 function loadImage(src) {
@@ -377,11 +517,21 @@ export default function CanvasGame() {
 
   const [playerClass, setPlayerClass] = useState(null);
 
+  // какая карта сейчас активна
+  const [mapId, setMapId] = useState("overworld");
+
+  // куда ставить игрока при входе на карту (в тайлах)
+  const [spawnInfo, setSpawnInfo] = useState(null);
+
   // overlay
   const [gameOver, setGameOver] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [kills, setKills] = useState(0);
   const startRef = useRef(performance.now());
+
+  // глобальные HP и оружие (сохраняются между переходами по картам)
+  const hpRef = useRef(null); // число HP
+  const weaponRef = useRef(null); // "sword" | "bow" | "staff" | null
 
   // HUD по оружию (для DOM-текста)
   const [weaponHud, setWeaponHud] = useState("нет");
@@ -454,15 +604,37 @@ export default function CanvasGame() {
   useEffect(() => {
     if (!playerClass) return; // пока класс не выбран — не запускаем игру
 
-    startRef.current = performance.now();
-    setGameOver(false);
-    setElapsedMs(0);
-    setKills(0);
-    setWeaponHud("нет");
+    const world = WORLDS[mapId];
+    if (!world) return;
+
+    const MAP = world.map;
+    const SPAWN_POINTS = world.spawnPoints;
+    const WEAPON_TILES = world.weaponTiles;
+    const EXIT_TILES = world.exits;
 
     const cfg = CLASS_CONFIG[playerClass];
     const MAX_HP = cfg.maxHp;
     const PLAYER_SPEED = cfg.speed;
+
+    // Определяем, это вход через портал или новый забег
+    const isPortalSpawn = spawnInfo && spawnInfo.mapId === mapId;
+
+    // Если это новый ран (нет spawnInfo для этой карты) — сбрасываем HP/оружие
+    if (!isPortalSpawn) {
+      hpRef.current = MAX_HP;
+      weaponRef.current = null;
+    } else {
+      // если пришли через портал и HP ещё не инициализирован — выставим по умолчанию
+      if (hpRef.current == null) hpRef.current = MAX_HP;
+    }
+
+    // обновляем HUD по оружию
+    setWeaponHud(weaponRef.current || "нет");
+
+    startRef.current = performance.now();
+    setGameOver(false);
+    setElapsedMs(0);
+    setKills(0);
 
     const c = canvasRef.current;
     const ctx = c.getContext("2d");
@@ -483,7 +655,7 @@ export default function CanvasGame() {
       }
     }
 
-    // пикапы оружия
+    // пикапы оружия (перегенерятся при входе на карту; оружие у игрока сохраняется отдельно)
     const weaponPickups = WEAPON_TILES.map((w) => ({
       type: w.type,
       color: w.color,
@@ -494,19 +666,30 @@ export default function CanvasGame() {
       picked: false,
     }));
 
+    // выбираем спавн для игрока
+    const spawn =
+      spawnInfo && spawnInfo.mapId === mapId
+        ? spawnInfo
+        : { mapId, tx: world.defaultSpawn.tx, ty: world.defaultSpawn.ty };
+
+    const startHp = Math.min(
+      hpRef.current != null ? hpRef.current : MAX_HP,
+      MAX_HP
+    );
+
     // игрок
     const player = {
-      x: TILE * 2,
-      y: TILE * 2,
+      x: spawn.tx * TILE,
+      y: spawn.ty * TILE,
       w: FRAME_W,
       h: FRAME_H,
       dir: 1,
       state: "sleep", // sleep | idle | run | attack | die | blink | ability
       frame: 0,
       acc: 0,
-      weapon: null, // sword | bow | staff
+      weapon: weaponRef.current, // sword | bow | staff | null
       attackStartedAt: 0,
-      hp: MAX_HP,
+      hp: startHp,
       hurtAt: -9999,
       dead: false,
       dieStartedAt: 0,
@@ -544,9 +727,12 @@ export default function CanvasGame() {
         dotTicksLeft: 0,
       };
     }
+
     const goblins = [];
-    goblins.push(makeGoblin(SPAWN_POINTS[0].x, SPAWN_POINTS[0].y));
-    let nextSpawnAt = performance.now() + SPAWN_INTERVAL_MS;
+    if (SPAWN_POINTS && SPAWN_POINTS.length > 0) {
+      goblins.push(makeGoblin(SPAWN_POINTS[0].x, SPAWN_POINTS[0].y));
+    }
+    let nextSpawnAt = performance.now() + 4000;
 
     // === Сердца (хил) ===
     const hearts = [];
@@ -600,6 +786,8 @@ export default function CanvasGame() {
     const onKey = (e) => {
       if (e.key.toLowerCase() === "r") {
         running = false;
+        // новый забег — очищаем spawnInfo, чтобы стартовать с defaultSpawn
+        setSpawnInfo(null);
         setRestartKey((k) => k + 1);
       }
     };
@@ -642,40 +830,39 @@ export default function CanvasGame() {
       }
     }
 
-    function getPlayerAnimMeta(player) {
-      if (player.state === "sleep") return PLAYER_FRAMES.sleep;
-      if (player.state === "die") return PLAYER_FRAMES.die;
-      if (player.state === "blink") return PLAYER_FRAMES.blink;
-      if (player.state === "attack") return PLAYER_FRAMES.attack;
-      if (player.state === "ability") return PLAYER_FRAMES.attack; // анимация скилла как атакующая
-      if (player.state === "run") return PLAYER_FRAMES.run;
+    function getPlayerAnimMeta(p) {
+      if (p.state === "sleep") return PLAYER_FRAMES.sleep;
+      if (p.state === "die") return PLAYER_FRAMES.die;
+      if (p.state === "blink") return PLAYER_FRAMES.blink;
+      if (p.state === "attack") return PLAYER_FRAMES.attack;
+      if (p.state === "ability") return PLAYER_FRAMES.attack; // анимация скилла как атакующая
+      if (p.state === "run") return PLAYER_FRAMES.run;
       return PLAYER_FRAMES.idle;
     }
 
-    function getPlayerRow(player) {
-      if (player.state === "sleep") return PLAYER_ROWS_BASE.sleep;
-      if (player.state === "die") return PLAYER_ROWS_BASE.die;
-      if (player.state === "blink") return BLINK_ROW;
+    function getPlayerRow(p) {
+      if (p.state === "sleep") return PLAYER_ROWS_BASE.sleep;
+      if (p.state === "die") return PLAYER_ROWS_BASE.die;
+      if (p.state === "blink") return BLINK_ROW;
 
-      const wRows = player.weapon ? PLAYER_WEAPON_ROWS[player.weapon] : null;
+      const wRows = p.weapon ? PLAYER_WEAPON_ROWS[p.weapon] : null;
 
       // Анимация скилла (например, slam воина)
-      if (player.state === "ability") {
-        // ВСЕГДА играем строку 115, если это slam, неважно какое оружие / есть ли оно
-        if (player.abilityType === "slam") {
+      if (p.state === "ability") {
+        // ВСЕГДА играем строку 115, если это slam, неважно какое оружие
+        if (p.abilityType === "slam") {
           return PLAYER_ABILITY_ROWS.slam; // строка 115
         }
-        // fallback если появятся другие абилки с оружейными строками
         if (wRows) return wRows.attack;
         return PLAYER_ROWS_BASE.run;
       }
 
-      if (player.state === "attack") {
+      if (p.state === "attack") {
         if (wRows) return wRows.attack;
         return PLAYER_ROWS_BASE.run;
       }
 
-      if (player.state === "run") {
+      if (p.state === "run") {
         if (wRows) return wRows.run;
         return PLAYER_ROWS_BASE.run;
       }
@@ -692,11 +879,11 @@ export default function CanvasGame() {
       return "g_idle";
     }
 
-    function attackHitbox(player) {
+    function attackHitbox(p) {
       const w = 14;
       const h = 12;
-      const x = player.dir === 1 ? player.x + player.w - 4 : player.x - w + 4;
-      const y = player.y + player.h / 2 - h / 2;
+      const x = p.dir === 1 ? p.x + p.w - 4 : p.x - w + 4;
+      const y = p.y + p.h / 2 - h / 2;
       return { x, y, w, h };
     }
 
@@ -709,11 +896,11 @@ export default function CanvasGame() {
     }
 
     function spawnGoblin(now) {
-      if (goblins.length >= MAX_GOBLINS) return;
-      if (REQUIRE_SWORD_TO_SPAWN && !player.weapon) return;
+      if (goblins.length >= 3) return;
+      if (!SPAWN_POINTS || SPAWN_POINTS.length === 0) return;
       const pt = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
       goblins.push(makeGoblin(pt.x, pt.y));
-      nextSpawnAt = now + SPAWN_INTERVAL_MS;
+      nextSpawnAt = now + 4000;
     }
 
     function spawnProjectile(type) {
@@ -844,15 +1031,43 @@ export default function CanvasGame() {
         player.state = "idle";
       }
 
+      // === ПРОВЕРКА: НАСТУПИЛ ЛИ ИГРОК НА ВЫХОД ===
+      {
+        const centerX = player.x + player.w / 2;
+        const centerY = player.y + player.h / 2;
+        const tileX = Math.floor(centerX / TILE);
+        const tileY = Math.floor(centerY / TILE);
+
+        const exit = EXIT_TILES.find((e) => e.tx === tileX && e.ty === tileY);
+
+        if (exit) {
+          // Останавливаем текущий цикл
+          running = false;
+
+          // Запоминаем, куда ставить игрока в новой карте
+          setSpawnInfo({
+            mapId: exit.targetWorld,
+            tx: exit.targetSpawn.tx,
+            ty: exit.targetSpawn.ty,
+          });
+
+          // Переходим на другую карту, HP и оружие уже сохранены в hpRef/weaponRef
+          setMapId(exit.targetWorld);
+
+          return; // выходим из update, дальше не обновляем эту карту
+        }
+      }
+
       // подбор оружия
       for (const w of weaponPickups) {
         if (!w.picked && aabb(player, w)) {
           w.picked = true;
           player.weapon = w.type;
+          weaponRef.current = w.type; // сохраняем между картами
+          setWeaponHud(w.type);
           player.state = "idle";
           player.frame = 0;
           player.acc = 0;
-          setWeaponHud(w.type);
         }
       }
 
@@ -865,6 +1080,7 @@ export default function CanvasGame() {
         }
         if (!player.dead && aabb(player, h) && player.hp < MAX_HP) {
           player.hp = Math.min(MAX_HP, player.hp + HEART_HEAL);
+          hpRef.current = player.hp; // сохраняем HP
           hearts.splice(i, 1);
         }
       }
@@ -1041,7 +1257,6 @@ export default function CanvasGame() {
           g.dotTicksLeft -= 1;
           g.dotNextTickAt += ARROW_DOT_INTERVAL_MS;
 
-          // если гоблин умер от DoT — сбросим метку
           if (g.dotTicksLeft <= 0 || g.hp <= 0) {
             g.dotType = null;
           }
@@ -1057,7 +1272,7 @@ export default function CanvasGame() {
           g.knockbackVy = 0;
 
           if (g.stunnedUntil && now < g.stunnedUntil) {
-            // только анимация (ниже)
+            // стоим, только анимация
           } else {
             const dx = player.x - g.x;
             const dy = player.y - g.y;
@@ -1183,25 +1398,20 @@ export default function CanvasGame() {
               hitEnemy = true;
 
               if (p.type === "arrow") {
-                // мгновенный урон
                 damageGoblin(g, ARROW_HIT_DAMAGE, now);
-                // вешаем DoT
                 g.dotType = "arrow";
                 g.dotTicksLeft = ARROW_DOT_TICKS;
                 g.dotNextTickAt = now + ARROW_DOT_INTERVAL_MS;
               }
-              // staff AoE перенесён ниже — при любом столкновении (стена или моб)
               break;
             }
           }
         }
 
         if (hitWall || hitEnemy) {
-          // Фаербол: AoE взрыв по области ВСЕГДА, даже если ударился о стену
           if (p.type === "staff") {
             const aoeR = TILE;
 
-            // урон по области
             for (const g2 of goblins) {
               if (g2.dead || g2.state === "die") continue;
               const gx = g2.x + g2.w / 2;
@@ -1212,7 +1422,6 @@ export default function CanvasGame() {
               }
             }
 
-            // визуальный взрыв
             explosions.push({
               x: p.x,
               y: p.y,
@@ -1241,6 +1450,7 @@ export default function CanvasGame() {
         if (!playerInvuln && aabb(gb, player)) {
           player.hp = Math.max(0, player.hp - 1);
           player.hurtAt = now;
+          hpRef.current = player.hp; // сохраняем HP
           if (player.hp <= 0 && player.state !== "die") {
             player.state = "die";
             player.frame = 0;
@@ -1258,7 +1468,7 @@ export default function CanvasGame() {
         if (goblins[i].dead) goblins.splice(i, 1);
       }
 
-      // ПЛАВНАЯ КАМЕРА (сразу с учётом границ карты)
+      // ПЛАВНАЯ КАМЕРА (с учётом границ карты)
       const worldW = MAP[0].length * TILE;
       const worldH = MAP.length * TILE;
       const maxCamX = worldW - VIEW_W;
@@ -1275,7 +1485,6 @@ export default function CanvasGame() {
       cam.x += (targetX - cam.x) * lerpFactor;
       cam.y += (targetY - cam.y) * lerpFactor;
 
-      // на всякий случай финальный кламп
       cam.x = Math.max(0, Math.min(cam.x, maxCamX));
       cam.y = Math.max(0, Math.min(cam.y, maxCamY));
     }
@@ -1283,7 +1492,6 @@ export default function CanvasGame() {
     function render() {
       const ctx = c.getContext("2d");
 
-      // Округлённая камера для рисования (убираем линии между тайлами)
       const camX = Math.round(cam.x);
       const camY = Math.round(cam.y);
 
@@ -1313,7 +1521,6 @@ export default function CanvasGame() {
         if (icon && icon.complete) {
           ctx.drawImage(icon, dx, dy, w.w, w.h);
         } else {
-          // fallback: квадратик, пока не загрузилась картинка
           ctx.fillStyle = w.color;
           ctx.fillRect(dx, dy, w.w, w.h);
         }
@@ -1328,7 +1535,6 @@ export default function CanvasGame() {
         if (heartImg && heartImg.complete) {
           ctx.drawImage(heartImg, dx, dy, h.w, h.h);
         } else {
-          // fallback: старый квадратик, если иконка не загрузилась
           ctx.fillStyle = "rgba(0,0,0,0.25)";
           ctx.fillRect(dx + 2, dy + 3, h.w, h.h);
           ctx.fillStyle = "#e53935";
@@ -1355,11 +1561,8 @@ export default function CanvasGame() {
         const dy = p.y - camY;
 
         if (p.type === "arrow") {
-          // зелёная полоска-стрела
-          const w = p.radius * 3; // длина стрелы
-          const h = 3; // толщина стрелы
-
-          // центрируем относительно позиции снаряда
+          const w = p.radius * 3;
+          const h = 3;
           const x = dx - w / 2;
           const y = dy - h / 2;
 
@@ -1368,7 +1571,6 @@ export default function CanvasGame() {
           ctx.strokeStyle = "#000";
           ctx.strokeRect(x, y, w, h);
         } else {
-          // фаербол — остаётся кругом
           ctx.beginPath();
           ctx.arc(dx, dy, p.radius, 0, Math.PI * 2);
           ctx.closePath();
@@ -1476,7 +1678,7 @@ export default function CanvasGame() {
         }
       }
 
-      // UI HP (оставил на канве — это ок)
+      // UI HP (на канве)
       ctx.fillStyle = "#000";
       ctx.fillRect(8, 8, 120, 10);
       ctx.fillStyle = "#f44";
@@ -1488,7 +1690,7 @@ export default function CanvasGame() {
       window.removeEventListener("keydown", onKey);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [images, keys, restartKey, playerClass, setWeaponHud]);
+  }, [images, keys, restartKey, playerClass, mapId, spawnInfo]);
 
   return (
     <div className={styles.canvasWrap}>
@@ -1505,6 +1707,7 @@ export default function CanvasGame() {
         <div className={styles.classWrapper}>
           <div>Класс: {CLASS_CONFIG[playerClass].name}</div>
           <div>Оружие: {weaponHud || "нет"}</div>
+          <div>Локация: {WORLDS[mapId]?.name}</div>
         </div>
       )}
 
@@ -1529,19 +1732,40 @@ export default function CanvasGame() {
             <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
               <div
                 className={styles.btn}
-                onClick={() => setPlayerClass("warrior")}
+                onClick={() => {
+                  setMapId("overworld");
+                  setSpawnInfo(null);
+                  hpRef.current = null;
+                  weaponRef.current = null;
+                  setWeaponHud("нет");
+                  setPlayerClass("warrior");
+                }}
               >
                 Воин
               </div>
               <div
                 className={styles.btn}
-                onClick={() => setPlayerClass("rogue")}
+                onClick={() => {
+                  setMapId("overworld");
+                  setSpawnInfo(null);
+                  hpRef.current = null;
+                  weaponRef.current = null;
+                  setWeaponHud("нет");
+                  setPlayerClass("rogue");
+                }}
               >
                 Разбойник
               </div>
               <div
                 className={styles.btn}
-                onClick={() => setPlayerClass("wizard")}
+                onClick={() => {
+                  setMapId("overworld");
+                  setSpawnInfo(null);
+                  hpRef.current = null;
+                  weaponRef.current = null;
+                  setWeaponHud("нет");
+                  setPlayerClass("wizard");
+                }}
               >
                 Маг
               </div>
@@ -1560,7 +1784,11 @@ export default function CanvasGame() {
             <div className={styles.btns}>
               <div
                 className={styles.btn}
-                onClick={() => setRestartKey((k) => k + 1)}
+                onClick={() => {
+                  // новый забег на текущей карте
+                  setSpawnInfo(null);
+                  setRestartKey((k) => k + 1);
+                }}
               >
                 Играть снова (R)
               </div>
@@ -1570,6 +1798,11 @@ export default function CanvasGame() {
                   // сбрасываем игру и возвращаемся к выбору класса
                   setGameOver(false);
                   setPlayerClass(null);
+                  setMapId("overworld");
+                  setSpawnInfo(null);
+                  hpRef.current = null;
+                  weaponRef.current = null;
+                  setWeaponHud("нет");
                 }}
               >
                 Выбрать класс
