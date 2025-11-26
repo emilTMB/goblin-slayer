@@ -42,6 +42,9 @@ const CAM_LERP = 10;
 // Длительность нокбэка
 const KNOCKBACK_DURATION_MS = 250;
 
+// Как часто гоблины пересчитывают путь к игроку
+const GOBLIN_REPATH_MS = 400;
+
 // ==== ПУТИ К ИКОНКАМ ЛУТА / UI ====
 const ICONS = {
   sword: asset("/assets/utils-png/sword-pixel-attack.png"),
@@ -622,8 +625,6 @@ export default function CanvasGame() {
     if (!isPortalSpawn) {
       hpRef.current = MAX_HP;
       weaponRef.current = null;
-      // при новом забеге (не через портал) — лут на этой карте тоже можно было бы сбросить,
-      // но мы сбрасываем весь лут глобально при нажатии R/«Играть снова»
     } else {
       if (hpRef.current == null) hpRef.current = MAX_HP;
     }
@@ -650,6 +651,171 @@ export default function CanvasGame() {
           solids.push({ x: x * TILE, y: y * TILE, w: TILE, h: TILE });
         else floorTiles.push({ tx: x, ty: y });
       }
+    }
+
+    const MAP_H = MAP.length;
+    const MAP_W = MAP[0].length;
+
+    const isInsideMap = (tx, ty) =>
+      tx >= 0 && ty >= 0 && ty < MAP_H && tx < MAP_W;
+
+    const isWalkableTile = (tx, ty) => isInsideMap(tx, ty) && MAP[ty][tx] === 0;
+
+    const worldToTile = (x, y) => ({
+      tx: Math.floor(x / TILE),
+      ty: Math.floor(y / TILE),
+    });
+
+    const tileToWorldCenter = (tx, ty) => ({
+      x: tx * TILE + TILE / 2,
+      y: ty * TILE + TILE / 2,
+    });
+
+    // === ПРОВЕРКА ЛИНИИ ВИДИМОСТИ (без стен) ===
+    function hasLineOfSight(from, to) {
+      const fromCenter = {
+        x: from.x + from.w / 2,
+        y: from.y + from.h / 2,
+      };
+      const toCenter = {
+        x: to.x + to.w / 2,
+        y: to.y + to.h / 2,
+      };
+
+      const dx = toCenter.x - fromCenter.x;
+      const dy = toCenter.y - fromCenter.y;
+      const dist = Math.hypot(dx, dy) || 1;
+
+      // Чем больше шагов, тем точнее – берём примерно по 1/4 тайла
+      const stepLen = TILE / 4;
+      const steps = Math.max(1, Math.ceil(dist / stepLen));
+
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        const px = fromCenter.x + dx * t;
+        const py = fromCenter.y + dy * t;
+
+        const tx = Math.floor(px / TILE);
+        const ty = Math.floor(py / TILE);
+
+        // всё, что вне карты, считаем стеной
+        if (!isInsideMap(tx, ty)) {
+          return false;
+        }
+
+        if (MAP[ty][tx] === 1) {
+          // Стена между мобом и игроком – LOS нет
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    // === ПОИСК ПУТИ (A* по тайлам, с диагоналями) ===
+    function findPath(startTx, startTy, endTx, endTy) {
+      if (!isWalkableTile(startTx, startTy)) return [];
+
+      // если конечный тайл не проходим, ищем ближайший проходимый вокруг
+      if (!isWalkableTile(endTx, endTy)) {
+        let found = false;
+        outer: for (let r = 1; r <= 2; r++) {
+          for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+              const nx = endTx + dx;
+              const ny = endTy + dy;
+              if (isWalkableTile(nx, ny)) {
+                endTx = nx;
+                endTy = ny;
+                found = true;
+                break outer;
+              }
+            }
+          }
+        }
+        if (!found) return [];
+      }
+
+      const key = (x, y) => `${x},${y}`;
+      const open = [];
+      const gScore = {};
+      const fScore = {};
+      const cameFrom = {};
+      const inOpen = new Set();
+
+      const h = (x, y) => Math.hypot(x - endTx, y - endTy);
+
+      const startKey = key(startTx, startTy);
+      gScore[startKey] = 0;
+      fScore[startKey] = h(startTx, startTy);
+      open.push({ tx: startTx, ty: startTy, f: fScore[startKey] });
+      inOpen.add(startKey);
+
+      const dirs = [
+        { dx: 1, dy: 0, cost: 1 },
+        { dx: -1, dy: 0, cost: 1 },
+        { dx: 0, dy: 1, cost: 1 },
+        { dx: 0, dy: -1, cost: 1 },
+        { dx: 1, dy: 1, cost: Math.SQRT2 },
+        { dx: 1, dy: -1, cost: Math.SQRT2 },
+        { dx: -1, dy: 1, cost: Math.SQRT2 },
+        { dx: -1, dy: -1, cost: Math.SQRT2 },
+      ];
+
+      while (open.length > 0) {
+        // достаём узел с минимальным f
+        let bestIndex = 0;
+        for (let i = 1; i < open.length; i++) {
+          if (open[i].f < open[bestIndex].f) bestIndex = i;
+        }
+        const current = open.splice(bestIndex, 1)[0];
+        const cKey = key(current.tx, current.ty);
+        inOpen.delete(cKey);
+
+        if (current.tx === endTx && current.ty === endTy) {
+          // восстанавливаем путь
+          const path = [];
+          let k = cKey;
+          while (k !== startKey) {
+            const [cx, cy] = k.split(",").map(Number);
+            path.push({ tx: cx, ty: cy });
+            k = cameFrom[k];
+          }
+          path.reverse();
+          return path;
+        }
+
+        for (const d of dirs) {
+          const nx = current.tx + d.dx;
+          const ny = current.ty + d.dy;
+          if (!isWalkableTile(nx, ny)) continue;
+
+          // запрет "срезать" угол по диагонали
+          if (d.dx !== 0 && d.dy !== 0) {
+            if (
+              !isWalkableTile(current.tx + d.dx, current.ty) ||
+              !isWalkableTile(current.tx, current.ty + d.dy)
+            ) {
+              continue;
+            }
+          }
+
+          const nKey = key(nx, ny);
+          const tentativeG = gScore[cKey] + d.cost;
+
+          if (gScore[nKey] === undefined || tentativeG < gScore[nKey]) {
+            cameFrom[nKey] = cKey;
+            gScore[nKey] = tentativeG;
+            fScore[nKey] = tentativeG + h(nx, ny);
+            if (!inOpen.has(nKey)) {
+              open.push({ tx: nx, ty: ny, f: fScore[nKey] });
+              inOpen.add(nKey);
+            }
+          }
+        }
+      }
+
+      return [];
     }
 
     // === PERSISTENT LOOT ===
@@ -727,6 +893,14 @@ export default function CanvasGame() {
         dotType: null,
         dotNextTickAt: 0,
         dotTicksLeft: 0,
+
+        // === ИИ-поля ===
+        hasSeenPlayer: false, // уже видел игрока?
+        path: [], // путь в тайлах [{tx,ty}, ...]
+        pathIndex: 0, // текущая цель в path
+        lastPathfindAt: 0, // когда в последний раз считали путь
+        pathTargetTx: null, // к какому тайлу игрока строили путь
+        pathTargetTy: null,
       };
     }
 
@@ -1217,9 +1391,11 @@ export default function CanvasGame() {
         player.abilityLastUsedAt = now;
       }
 
+      // === ЛОГИКА ГОБЛИНОВ С LOS + PATHFINDING ===
       for (const g of goblins) {
         if (g.dead) continue;
 
+        // DoT
         if (
           g.dotType === "arrow" &&
           g.dotTicksLeft > 0 &&
@@ -1236,6 +1412,7 @@ export default function CanvasGame() {
           }
         }
 
+        // Нокбэк
         if (g.knockbackEndAt && now < g.knockbackEndAt) {
           tryMove(g, g.knockbackVx * dt, g.knockbackVy * dt);
         } else {
@@ -1244,34 +1421,108 @@ export default function CanvasGame() {
           g.knockbackVy = 0;
 
           if (g.stunnedUntil && now < g.stunnedUntil) {
-            // стоим
+            // стоим оглушённые
           } else {
-            const dx = player.x - g.x;
-            const dy = player.y - g.y;
-            const dist = Math.hypot(dx, dy);
-            g.dir = dx >= 0 ? 1 : -1;
+            // === ЛИНИЯ ВИДИМОСТИ + АГРО ===
+            const dxToPlayer = player.x - g.x;
+            const dyToPlayer = player.y - g.y;
+            const distToPlayer = Math.hypot(dxToPlayer, dyToPlayer);
+            g.dir = dxToPlayer >= 0 ? 1 : -1;
 
-            if (g.state !== "die" && dist > 22) {
-              if (g.state !== "attack") {
-                g.state = "run";
-                const glen = dist || 1;
-                tryMove(
-                  g,
-                  (dx / glen) * ENEMY_SPEED * dt,
-                  (dy / glen) * ENEMY_SPEED * dt
-                );
+            if (!g.hasSeenPlayer) {
+              if (hasLineOfSight(g, player)) {
+                g.hasSeenPlayer = true;
               }
-            } else if (g.state !== "die") {
+            }
+
+            // === АТАКА, если уже видел игрока и подошёл достаточно близко ===
+            if (g.hasSeenPlayer && g.state !== "die" && distToPlayer <= 22) {
               if (g.state !== "attack") {
                 g.state = "attack";
                 g.frame = 0;
                 g.acc = 0;
                 g.attackStartedAt = now;
               }
+            } else if (g.state !== "die") {
+              // === ПРЕСЛЕДОВАНИЕ ПО ПУТИ, если уже видел игрока ===
+              if (g.hasSeenPlayer && g.state !== "attack") {
+                const gobCenter = {
+                  x: g.x + g.w / 2,
+                  y: g.y + g.h / 2,
+                };
+                const gobTile = worldToTile(gobCenter.x, gobCenter.y);
+                const playerCenter = {
+                  x: player.x + player.w / 2,
+                  y: player.y + player.h / 2,
+                };
+                const playerTile = worldToTile(playerCenter.x, playerCenter.y);
+
+                const needRepath =
+                  !g.path ||
+                  g.path.length === 0 ||
+                  g.pathTargetTx !== playerTile.tx ||
+                  g.pathTargetTy !== playerTile.ty ||
+                  now - g.lastPathfindAt > GOBLIN_REPATH_MS;
+
+                if (needRepath) {
+                  g.path = findPath(
+                    gobTile.tx,
+                    gobTile.ty,
+                    playerTile.tx,
+                    playerTile.ty
+                  );
+                  g.pathIndex = 0;
+                  g.pathTargetTx = playerTile.tx;
+                  g.pathTargetTy = playerTile.ty;
+                  g.lastPathfindAt = now;
+                }
+
+                if (
+                  g.path &&
+                  g.path.length > 0 &&
+                  g.pathIndex < g.path.length
+                ) {
+                  const node = g.path[g.pathIndex];
+                  const targetPos = tileToWorldCenter(node.tx, node.ty);
+                  const gx = gobCenter.x;
+                  const gy = gobCenter.y;
+                  const dx = targetPos.x - gx;
+                  const dy = targetPos.y - gy;
+                  const dist = Math.hypot(dx, dy);
+
+                  if (dist < 2) {
+                    // достигли текущего узла — идём к следующему
+                    g.pathIndex++;
+                  } else {
+                    const len = dist || 1;
+                    const vx = (dx / len) * ENEMY_SPEED;
+                    const vy = (dy / len) * ENEMY_SPEED;
+                    g.state = "run";
+                    tryMove(g, vx * dt, vy * dt);
+                  }
+                } else {
+                  // пути нет — простой "иди на игрока" как раньше
+                  if (distToPlayer > 22 && g.state !== "attack") {
+                    const glen = distToPlayer || 1;
+                    g.state = "run";
+                    tryMove(
+                      g,
+                      (dxToPlayer / glen) * ENEMY_SPEED * dt,
+                      (dyToPlayer / glen) * ENEMY_SPEED * dt
+                    );
+                  } else {
+                    g.state = "idle";
+                  }
+                }
+              } else {
+                // ещё не видел игрока — просто стоим
+                g.state = "idle";
+              }
             }
           }
         }
 
+        // === АНИМАЦИЯ ГОБЛИНА ===
         const gm =
           goblinSprites[
             g.state === "die"
@@ -1295,6 +1546,53 @@ export default function CanvasGame() {
         }
       }
 
+      // === РАЗЪЕЗЖАЕМСЯ, ЕСЛИ ГОБЛИНЫ СТОЯТ ДРУГ В ДРУГЕ ===
+      for (let i = 0; i < goblins.length; i++) {
+        const a = goblins[i];
+        if (a.dead) continue;
+        for (let j = i + 1; j < goblins.length; j++) {
+          const b = goblins[j];
+          if (b.dead) continue;
+
+          if (aabb(a, b)) {
+            const ax = a.x + a.w / 2;
+            const ay = a.y + a.h / 2;
+            const bx = b.x + b.w / 2;
+            const by = b.y + b.h / 2;
+
+            let dx = bx - ax;
+            let dy = by - ay;
+            let dist = Math.hypot(dx, dy);
+
+            if (dist === 0) {
+              // если вообще совпали — задаём произвольное направление
+              dx = 1;
+              dy = 0;
+              dist = 1;
+            }
+
+            const minDist = (a.w + b.w) / 2; // желаемое расстояние
+            const overlap = minDist - dist;
+
+            if (overlap > 0) {
+              const push = overlap / 2;
+              const nx = dx / dist;
+              const ny = dy / dist;
+
+              const axPush = -nx * push;
+              const ayPush = -ny * push;
+              const bxPush = nx * push;
+              const byPush = ny * push;
+
+              // используем tryMove, чтобы не проталкивать их в стены
+              tryMove(a, axPush, ayPush);
+              tryMove(b, bxPush, byPush);
+            }
+          }
+        }
+      }
+
+      // === ЛОВУШКИ ===
       for (let ti = traps.length - 1; ti >= 0; ti--) {
         const t = traps[ti];
         if (now - t.createdAt > t.durationMs) {
