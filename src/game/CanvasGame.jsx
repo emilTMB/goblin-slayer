@@ -43,7 +43,7 @@ const CAM_LERP = 10;
 const KNOCKBACK_DURATION_MS = 250;
 
 // Как часто гоблины пересчитывают путь к игроку
-const GOBLIN_REPATH_MS = 400;
+const GOBLIN_REPATH_MS = 300;
 
 // ==== ПУТИ К ИКОНКАМ ЛУТА / UI ====
 const ICONS = {
