@@ -8,7 +8,7 @@ export default function App() {
       <h1 className={styles.title}>Убийца гоблинов</h1>
       <CanvasGame />
       <p className={styles.hint}>
-        ВАЖНО - использкуйте английскую раскладку клавиатуры! <br />
+        ВАЖНО - используйте английскую раскладку клавиатуры! <br />
         WASD/←↑→↓ — движение • Space — удар • R — перезапуск • Q — способность
       </p>
     </div>

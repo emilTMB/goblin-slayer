@@ -72,7 +72,7 @@ body {
   min-width: 260px;
   max-width: 90%;
   padding: 16px 18px;
-  border-radius: 10px;
+  // border-radius: 10px;
   background: #141821;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
@@ -92,9 +92,9 @@ body {
 .btn {
   display: inline-block;
   padding: 8px 12px;
-  border-radius: 8px;
-  background: #3b82f6;
-  color: #fff;
+  // border-radius: 8px;
+  background: #f6803b;
+  color: #0b0d11;
   font-weight: 600;
   cursor: pointer;
   user-select: none;
